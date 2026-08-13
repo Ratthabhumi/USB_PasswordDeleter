@@ -33,26 +33,75 @@ if (-not (Test-Path $targetDir)) {
     111, 222, 11, 9, 87, 44, 12, 10
 )
 
-try {
-    # 1. Supervisor Password (SVP)
-    Write-Host "[1/2] Supervisor Password (SVP / BIOS Master Password):" -ForegroundColor Yellow
-    $svpSecure = Read-Host "Enter Current Supervisor Password" -AsSecureString
-    $svpPath = Join-Path $targetDir "supervisor.txt"
-    $svpSecure | ConvertFrom-SecureString -Key $aesKey | Out-File $svpPath -Force
-    Write-Host "  [OK] Encrypted & saved -> Config\supervisor.txt" -ForegroundColor Green
-    Write-Host ""
+function Prompt-And-Save-Password {
+    param (
+        [string]$StepTitle,
+        [string]$TargetFileName
+    )
 
-    # 2. Power-On & Hard Disk Password (POP / HDP)
-    Write-Host "[2/2] Power-On & Hard Disk Password (Shared Password):" -ForegroundColor Yellow
-    $popHddSecure = Read-Host "Enter Current Power-On / HDD Password" -AsSecureString
-    $popHddPath = Join-Path $targetDir "pop_hdd.txt"
-    $popHddSecure | ConvertFrom-SecureString -Key $aesKey | Out-File $popHddPath -Force
-    Write-Host "  [OK] Encrypted & saved -> Config\pop_hdd.txt" -ForegroundColor Green
-    Write-Host ""
+    while ($true) {
+        Write-Host "$StepTitle" -ForegroundColor Yellow
+        $pwd1 = Read-Host "  1. Enter Password" -AsSecureString
+        $pwd2 = Read-Host "  2. Confirm Password (Re-enter to verify)" -AsSecureString
+
+        # Convert to plain text in RAM to verify matching
+        $bstr1 = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($pwd1)
+        $plain1 = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr1)
+        [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr1)
+
+        $bstr2 = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($pwd2)
+        $plain2 = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr2)
+        [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr2)
+
+        if ($plain1 -ne $plain2) {
+            Write-Host "  [!] Error: Passwords do not match! Please try again." -ForegroundColor Red
+            Write-Host ""
+            continue
+        }
+
+        # Show length summary
+        $len = $plain1.Length
+        if ($len -eq 0) {
+            Write-Host "  [!] Password is empty (No password set)." -ForegroundColor DarkGray
+        } else {
+            $masked = if ($len -gt 2) { $plain1.Substring(0,1) + ("*" * ($len - 2)) + $plain1.Substring($len - 1, 1) } else { "*" * $len }
+            Write-Host "  [OK] Passwords match! Length: $len characters ($masked)" -ForegroundColor Green
+        }
+
+        # Optional reveal prompt so user can double-check with their own eyes
+        $reveal = Read-Host "  Do you want to reveal the password to double-check? [y/N]"
+        if ($reveal -match "^[yY]") {
+            Write-Host "  -> Revealed password: '$plain1'" -ForegroundColor Cyan
+            $confirm = Read-Host "  Save this password? [Y/n]"
+            if ($confirm -match "^[nN]") {
+                Write-Host "  Re-entering password..." -ForegroundColor Yellow
+                Write-Host ""
+                continue
+            }
+        }
+
+        # Encrypt and save
+        $targetPath = Join-Path $targetDir $TargetFileName
+        $pwd1 | ConvertFrom-SecureString -Key $aesKey | Out-File $targetPath -Force
+        Write-Host "  [OK] Encrypted and saved -> Config\$TargetFileName" -ForegroundColor Green
+        Write-Host ""
+
+        # Memory cleanup
+        Remove-Variable -Name plain1, plain2 -ErrorAction SilentlyContinue
+        break
+    }
+}
+
+try {
+    # 1. Supervisor Password
+    Prompt-And-Save-Password -StepTitle "[1/2] Supervisor Password (SVP / BIOS Master Password):" -TargetFileName "supervisor.txt"
+
+    # 2. Power-On and Hard Disk Password
+    Prompt-And-Save-Password -StepTitle "[2/2] Power-On and Hard Disk Password (Shared Password):" -TargetFileName "pop_hdd.txt"
 
     Write-Host "========================================================" -ForegroundColor Cyan
     Write-Host "[ SUCCESS ] Both credentials encrypted successfully!" -ForegroundColor Green
-    Write-Host "These files will be baked into the WinPE Boot USB." -ForegroundColor Yellow
+    Write-Host "Files saved in Config/ folder and ready for setup.bat." -ForegroundColor Yellow
     Write-Host "========================================================" -ForegroundColor Cyan
 } catch {
     Write-Host ""
