@@ -3,14 +3,17 @@ param(
     [string]$TargetFolder = ""
 )
 
-Write-Host "================================================"
-Write-Host " LENOVO CREDENTIAL GENERATOR (AES-256)"
-Write-Host "================================================"
+Write-Host "========================================================" -ForegroundColor Cyan
+Write-Host "     LENOVO CREDENTIAL GENERATOR (AES-256 ENCRYPTED)    " -ForegroundColor Cyan
+Write-Host "========================================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "This tool will encrypt your authorization passwords for"
+Write-Host "automatic BIOS, Power-On, and Hard Disk password deletion."
+Write-Host ""
 
 # Resolve absolute path to the project's Config directory
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 if ([string]::IsNullOrWhiteSpace($TargetFolder)) {
-    # If script is in Lenovo\Tools, project root is 2 levels up
     $projectRoot = Resolve-Path (Join-Path $scriptDir "..\..")
     $targetDir = Join-Path $projectRoot "Config"
 } else {
@@ -22,7 +25,7 @@ if (-not (Test-Path $targetDir)) {
     New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
 }
 
-# Static AES key (Must match Apply-Configuration.ps1)
+# Static AES-256 key (Matches Apply-Configuration.ps1 in WinPE)
 [byte[]]$aesKey = @(
     14, 211, 88, 142, 63, 102, 199, 45, 
     21, 66, 178, 201, 105, 91, 74, 188, 
@@ -31,23 +34,31 @@ if (-not (Test-Path $targetDir)) {
 )
 
 try {
-    $plainPassword = Read-Host "Enter the authorized Supervisor Password" -AsSecureString
-
-    $encryptedPath = Join-Path $targetDir "supervisor.txt"
-
-    $plainPassword | ConvertFrom-SecureString -Key $aesKey | Out-File $encryptedPath -Force
-
+    # 1. Supervisor Password (SVP)
+    Write-Host "[1/2] Supervisor Password (SVP / BIOS Master Password):" -ForegroundColor Yellow
+    $svpSecure = Read-Host "Enter Current Supervisor Password" -AsSecureString
+    $svpPath = Join-Path $targetDir "supervisor.txt"
+    $svpSecure | ConvertFrom-SecureString -Key $aesKey | Out-File $svpPath -Force
+    Write-Host "  [OK] Encrypted & saved -> Config\supervisor.txt" -ForegroundColor Green
     Write-Host ""
-    Write-Host "[ OK ] Password encrypted and saved to:" -ForegroundColor Green
-    Write-Host "       $encryptedPath" -ForegroundColor Cyan
+
+    # 2. Power-On & Hard Disk Password (POP / HDP)
+    Write-Host "[2/2] Power-On & Hard Disk Password (Shared Password):" -ForegroundColor Yellow
+    $popHddSecure = Read-Host "Enter Current Power-On / HDD Password" -AsSecureString
+    $popHddPath = Join-Path $targetDir "pop_hdd.txt"
+    $popHddSecure | ConvertFrom-SecureString -Key $aesKey | Out-File $popHddPath -Force
+    Write-Host "  [OK] Encrypted & saved -> Config\pop_hdd.txt" -ForegroundColor Green
     Write-Host ""
-    Write-Host "This file will be included in the Config folder of your deployment USB/WIM." -ForegroundColor Yellow
+
+    Write-Host "========================================================" -ForegroundColor Cyan
+    Write-Host "[ SUCCESS ] Both credentials encrypted successfully!" -ForegroundColor Green
+    Write-Host "These files will be baked into the WinPE Boot USB." -ForegroundColor Yellow
+    Write-Host "========================================================" -ForegroundColor Cyan
 } catch {
     Write-Host ""
-    Write-Host "[ ERROR ] Failed to save credential: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "[ ERROR ] Failed to save credentials: $($_.Exception.Message)" -ForegroundColor Red
 }
 
 Write-Host ""
 Write-Host "Press Enter to exit..."
 [void][System.Console]::ReadLine()
-

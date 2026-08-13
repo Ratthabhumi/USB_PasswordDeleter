@@ -1,7 +1,7 @@
 function Verify-LenovoFirmwareConfig {
-    Write-Host "Verifying configuration..."
+    Write-Host "Verifying final firmware & password state..." -ForegroundColor Cyan
     
-    # We must fetch the config again to ensure changes were committed
+    # We must fetch the config again to ensure changes were committed in BIOS
     $config = Get-LenovoFirmwareConfig
     
     $isCompliant = $true
@@ -11,30 +11,44 @@ function Verify-LenovoFirmwareConfig {
         return @{ Result = "FAILED"; Reason = "Could not read WMI after save" }
     }
 
-    # Verify Secure Boot (or other target settings)
-    if ($config.SecureBoot -ne "Disable") {
+    # 1. Verify Secure Boot
+    if ($config.SecureBoot -notin @("Disable", "Disabled", "0")) {
         $isCompliant = $false
-        $errors += "SecureBoot is $($config.SecureBoot) instead of Disable"
+        $errors += "SecureBoot is '$($config.SecureBoot)' instead of Disable"
     }
 
-    # Verify Power On Password is cleared
-    if ($config.PowerOnPassword -notmatch "(Disable|Unknown)") {
+    # 2. Verify Power On Password is cleared
+    if ($config.PowerOnPassword -match "^(Enable|Enabled|1)$") {
         $isCompliant = $false
         $errors += "PowerOnPassword is still enabled: $($config.PowerOnPassword)"
     }
 
-    # Verify Boot Order starts with HDD0
+    # 3. Verify Hard Disk Password is cleared
+    if ($config.HardDiskPassword -match "^(Enable|Enabled|1)$") {
+        $isCompliant = $false
+        $errors += "HardDiskPassword is still enabled: $($config.HardDiskPassword)"
+    }
+
+    # 4. Verify Supervisor Password is cleared
+    if ($config.FirmwareAuth -match "^(Enable|Enabled|1)$") {
+        $isCompliant = $false
+        $errors += "SupervisorPassword is still active: $($config.FirmwareAuth)"
+    }
+
+    # 5. Verify Boot Order starts with internal drive (HDD0 / NVMe)
     if ($config.BootOrder -notmatch "^HDD0") {
         $isCompliant = $false
         $errors += "BootOrder does not prioritize internal drive (Current: $($config.BootOrder))"
     }
 
     if ($isCompliant) {
-        Write-Host "[ OK ] Configuration successfully verified." -ForegroundColor Green
+        Write-Host "[ OK ] All configurations verified. Passwords removed." -ForegroundColor Green
         return @{ Result = "PASSED"; Reason = "COMPLIANT" }
     } else {
-        Write-Host "[FAIL] Verification errors found." -ForegroundColor Red
-        foreach ($err in $errors) { Write-Warning $err }
+        Write-Host "[ FAIL ] Verification checks failed:" -ForegroundColor Red
+        foreach ($err in $errors) { 
+            Write-Warning "  - $err" 
+        }
         return @{ Result = "FAILED"; Reason = ($errors -join '; ') }
     }
 }
