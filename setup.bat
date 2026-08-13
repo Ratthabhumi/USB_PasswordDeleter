@@ -1,6 +1,8 @@
 @echo off
 setlocal enabledelayedexpansion
 
+title Lenovo USB Password Deleter - WinPE Builder
+
 echo ========================================================
 echo Lenovo USB Password Deleter - WinPE Builder
 echo ========================================================
@@ -16,9 +18,10 @@ if %errorLevel% NEQ 0 (
     exit /b 1
 )
 
-:: Project directory resolution
+:: Save original project directory
 set "PROJECT_DIR=%~dp0"
 if "%PROJECT_DIR:~-1%"=="\" set "PROJECT_DIR=%PROJECT_DIR:~0,-1%"
+cd /d "%PROJECT_DIR%"
 
 :: Check credentials
 if not exist "%PROJECT_DIR%\Config\supervisor.txt" (
@@ -66,6 +69,7 @@ if not exist "%ADK_PATH%\Deployment Tools\DandISetEnv.bat" (
 
 :: Initialize ADK Environment
 call "%ADK_PATH%\Deployment Tools\DandISetEnv.bat"
+cd /d "%PROJECT_DIR%"
 
 set "PE_DIR=C:\WinPE_amd64"
 set "MOUNT_DIR=%PE_DIR%\mount"
@@ -83,9 +87,9 @@ if exist "%PE_DIR%" (
 
 if exist "%PE_DIR%" (
     echo.
-    echo [ERROR] Unable to remove existing directory "%PE_DIR%".
-    echo Some files are locked by another process (e.g. File Explorer or Antivirus).
-    echo Please close any open File Explorer windows, wait 5 seconds, and try again.
+    echo [ERROR] Unable to remove existing directory %PE_DIR%.
+    echo Some files are locked by another process.
+    echo Please close any open File Explorer windows and try again.
     echo.
     pause
     exit /b 1
@@ -95,6 +99,7 @@ echo.
 echo [1/6] Copying base WinPE files...
 call copype amd64 "%PE_DIR%"
 if %errorLevel% NEQ 0 (
+    echo.
     echo [ERROR] copype failed to initialize WinPE directory.
     pause
     exit /b 1
@@ -104,13 +109,14 @@ echo.
 echo [2/6] Mounting WinPE image...
 dism /Mount-Image /ImageFile:"%PE_DIR%\media\sources\boot.wim" /index:1 /MountDir:"%MOUNT_DIR%"
 if %errorLevel% NEQ 0 (
+    echo.
     echo [ERROR] DISM failed to mount boot.wim.
     pause
     exit /b 1
 )
 
 echo.
-echo [3/6] Injecting Required Packages (WMI, NetFX, Scripting, PowerShell, StorageWMI)...
+echo [3/6] Injecting Required Packages...
 set "OC_PATH=%ADK_PATH%\Windows Preinstallation Environment\amd64\WinPE_OCs"
 
 dism /Add-Package /Image:"%MOUNT_DIR%" /PackagePath:"%OC_PATH%\WinPE-WMI.cab" /Quiet /NoRestart
@@ -131,6 +137,7 @@ echo.
 echo [4/6] Copying Project Files to WinPE...
 xcopy /s /e /y "%PROJECT_DIR%\*" "%MOUNT_DIR%\USB_PasswordDeleter\" >nul
 if %errorLevel% NEQ 0 (
+    echo.
     echo [ERROR] Failed to copy project files to WinPE image.
     pause
     exit /b 1
@@ -144,6 +151,7 @@ echo.
 echo [6/6] Unmounting and saving image...
 dism /Unmount-Image /MountDir:"%MOUNT_DIR%" /commit
 if %errorLevel% NEQ 0 (
+    echo.
     echo [ERROR] DISM failed to commit and unmount image.
     pause
     exit /b 1
@@ -155,6 +163,7 @@ echo Building USB Boot Media on %TARGET_DRIVE%
 echo ========================================================
 call MakeWinPEMedia /UFD "%PE_DIR%" %TARGET_DRIVE%
 if %errorLevel% NEQ 0 (
+    echo.
     echo [ERROR] MakeWinPEMedia failed to write to %TARGET_DRIVE%.
     pause
     exit /b 1
