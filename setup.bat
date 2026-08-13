@@ -165,17 +165,26 @@ echo ========================================================
 echo Building USB Boot Media on %TARGET_DRIVE%
 echo ========================================================
 
-:: Safely close any open File Explorer windows targeting the USB drive to prevent DiskPart locking
+:: Safely close any open File Explorer windows targeting the USB drive to prevent locks
 echo [INFO] Releasing File Explorer locks on %TARGET_DRIVE%...
 powershell -NoProfile -Command "$shell = New-Object -ComObject Shell.Application; $shell.Windows() | Where-Object { $_.LocationURL -match '%TARGET_DRIVE%' } | ForEach-Object { $_.Quit() }"
 timeout /t 2 /nobreak >nul
 
-call MakeWinPEMedia /UFD "%PE_DIR%" %TARGET_DRIVE%
+:: Bypass buggy MakeWinPEMedia diskpart formatting and perform direct copy and bootsect
+echo [INFO] Copying WinPE files directly to %TARGET_DRIVE%...
+xcopy /s /e /y /h /i "%PE_DIR%\media\*" "%TARGET_DRIVE%\" >nul
 if %errorLevel% NEQ 0 (
     echo.
-    echo [ERROR] MakeWinPEMedia failed to write to %TARGET_DRIVE%.
+    echo [ERROR] Failed to copy WinPE files to %TARGET_DRIVE%.
     pause
     exit /b 1
+)
+
+echo [INFO] Writing Boot Sector to %TARGET_DRIVE%...
+"%ADK_PATH%\Deployment Tools\amd64\BCDBoot\bootsect.exe" /nt60 %TARGET_DRIVE% /force /mbr >nul
+if %errorLevel% NEQ 0 (
+    echo.
+    echo [WARNING] bootsect.exe returned an error. The USB might still be bootable.
 )
 
 echo.
