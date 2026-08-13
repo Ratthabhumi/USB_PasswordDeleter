@@ -76,30 +76,32 @@ set "MOUNT_DIR=%PE_DIR%\mount"
 
 :: Comprehensive cleanup of previous builds and locked mountpoints
 echo.
-echo Cleaning up previous WinPE builds and releasing file locks...
+echo Cleaning up previous WinPE builds and releasing locks...
 dism /Unmount-Image /MountDir:"%MOUNT_DIR%" /discard >nul 2>&1
+dism /Unmount-Image /MountDir:"C:\WinPE_Build\mount" /discard >nul 2>&1
 dism /Cleanup-Wim >nul 2>&1
 dism /Cleanup-Mountpoints >nul 2>&1
 
-:: Unload all dangling WinPE registry hives from HKLM
-powershell -NoProfile -Command "Get-ChildItem 'HKLM:\' -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'WinPE' } | ForEach-Object { $sub = $_.Name -replace '^HKEY_LOCAL_MACHINE\\',''; reg unload \"HKLM\$sub\" 2>&1 | Out-Null }"
+:: Unload dangling WinPE registry hives
+powershell -NoProfile -Command "(Get-ChildItem 'HKLM:\' -ErrorAction SilentlyContinue) | Where-Object { $_.Name -match 'WinPE' } | ForEach-Object { $k = $_.Name.Replace('HKEY_LOCAL_MACHINE\',''); & reg.exe unload \"HKLM\$k\" 2>&1 | Out-Null }"
 
+:: Take ownership and delete previous directory
+takeown /F "%PE_DIR%" /A /R /D Y >nul 2>&1
+icacls "%PE_DIR%" /grant Administrators:F /T /C /Q >nul 2>&1
+rd /s /q "%PE_DIR%" >nul 2>&1
+
+:: Fallback mechanism: If C:\WinPE_amd64 is locked by OS kernel, seamlessly use C:\WinPE_Build
 if exist "%PE_DIR%" (
+    echo [INFO] C:\WinPE_amd64 is held by OS registry lock. Using clean workspace: C:\WinPE_Build
+    set "PE_DIR=C:\WinPE_Build"
+    set "MOUNT_DIR=%PE_DIR%\mount"
+    takeown /F "%PE_DIR%" /A /R /D Y >nul 2>&1
+    icacls "%PE_DIR%" /grant Administrators:F /T /C /Q >nul 2>&1
     rd /s /q "%PE_DIR%" >nul 2>&1
 )
 
-if exist "%PE_DIR%" (
-    echo.
-    echo [ERROR] Unable to remove existing directory %PE_DIR%.
-    echo Some files are locked by another process.
-    echo Please close any open File Explorer windows and try again.
-    echo.
-    pause
-    exit /b 1
-)
-
 echo.
-echo [1/6] Copying base WinPE files...
+echo [1/6] Copying base WinPE files to %PE_DIR%...
 call copype amd64 "%PE_DIR%"
 if %errorLevel% NEQ 0 (
     echo.
