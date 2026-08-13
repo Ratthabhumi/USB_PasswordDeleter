@@ -164,6 +164,12 @@ echo.
 echo ========================================================
 echo Building USB Boot Media on %TARGET_DRIVE%
 echo ========================================================
+
+:: Safely close any open File Explorer windows targeting the USB drive to prevent DiskPart locking
+echo [INFO] Releasing File Explorer locks on %TARGET_DRIVE%...
+powershell -NoProfile -Command "$shell = New-Object -ComObject Shell.Application; $shell.Windows() | Where-Object { $_.LocationURL -match '%TARGET_DRIVE%' } | ForEach-Object { $_.Quit() }"
+timeout /t 2 /nobreak >nul
+
 call MakeWinPEMedia /UFD "%PE_DIR%" %TARGET_DRIVE%
 if %errorLevel% NEQ 0 (
     echo.
