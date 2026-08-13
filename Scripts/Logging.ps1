@@ -14,7 +14,13 @@ function Write-AuditLog {
     
     $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
     $ramLogPath = Join-Path $scriptDir "..\Logs\audit.csv"
+    $logDir = Split-Path -Parent $ramLogPath
     
+    # Ensure Logs folder exists
+    if (-not (Test-Path $logDir)) {
+        New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+    }
+
     if (-not (Test-Path $ramLogPath)) {
         "Timestamp,Serial,MachineType,Model,BIOSVersion,Storage,Result,Error" | Out-File $ramLogPath -Encoding UTF8
     }
@@ -26,7 +32,9 @@ function Write-AuditLog {
     $internalLogVol = Get-Volume | Where-Object { $_.DriveType -eq 'Fixed' -and $_.DriveLetter -ne $null } | Select-Object -First 1
     if ($null -ne $internalLogVol) {
         $internalPath = "$($internalLogVol.DriveLetter):\Logs"
-        if (-not (Test-Path $internalPath)) { New-Item -ItemType Directory -Path $internalPath -Force | Out-Null }
+        if (-not (Test-Path $internalPath)) { 
+            New-Item -ItemType Directory -Path $internalPath -Force | Out-Null 
+        }
         Copy-Item $ramLogPath -Destination "$internalPath\audit.csv" -Force -ErrorAction SilentlyContinue
     }
 }

@@ -6,8 +6,8 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 . (Join-Path $ScriptDir "Detect-Hardware.ps1")
 . (Join-Path $ScriptDir "Detect-Configuration.ps1")
 . (Join-Path $ScriptDir "Detect-USBRemoval.ps1")
-. (Join-Path $ScriptDir "Apply-Configuration.ps1")
 . (Join-Path $ScriptDir "BootOrder.ps1")
+. (Join-Path $ScriptDir "Apply-Configuration.ps1")
 . (Join-Path $ScriptDir "Verify-Configuration.ps1")
 . (Join-Path $ScriptDir "Logging.ps1")
 
@@ -69,9 +69,7 @@ if ($config.SecureBoot -in @("Disable", "Disabled", "0") -and $config.BootOrder 
 } else {
     $applyResult = Set-LenovoFirmwareConfig
     
-    if ($applyResult) {
-        $bootResult = Set-InternalBootPriority
-    } else {
+    if (-not $applyResult) {
         Write-Host "Configuration failed. See errors above." -ForegroundColor Red
         Write-AuditLog -Serial $hw.Serial -MachineType $hw.MachineType -Model $hw.Model -BIOSVersion $hw.BIOSVersion -Storage $hw.Storage -Result "MANUAL_REQUIRED" -ErrorDetail "Set-LenovoFirmwareConfig Failed"
         exit

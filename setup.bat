@@ -14,6 +14,20 @@ if %errorLevel% NEQ 0 (
     exit /b 1
 )
 
+:: Project directory resolution
+set "PROJECT_DIR=%~dp0"
+if "%PROJECT_DIR:~-1%"=="\" set "PROJECT_DIR=%PROJECT_DIR:~0,-1%"
+
+:: Check credentials
+if not exist "%PROJECT_DIR%\Config\supervisor.txt" (
+    echo.
+    echo [WARNING] No credentials found in Config\supervisor.txt!
+    echo If the target machines require password deletion, please run:
+    echo   powershell -File Lenovo\Tools\Set-Credentials.ps1
+    echo before building the USB.
+    echo.
+)
+
 :: Get target drive letter automatically
 echo Scanning for Removable USB Drives...
 set "TARGET_DRIVE="
@@ -39,7 +53,7 @@ pause
 set "ADK_PATH=C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit"
 if not exist "%ADK_PATH%\Deployment Tools\DandISetEnv.bat" (
     echo [ERROR] Windows ADK not found at default location.
-    echo Please install "Windows ADK" and "Windows PE add-on".
+    echo Please run Install-ADK.ps1 to install Windows ADK and WinPE add-on.
     pause
     exit /b 1
 )
@@ -66,7 +80,7 @@ echo [2/6] Mounting WinPE image...
 dism /Mount-Image /ImageFile:"%PE_DIR%\media\sources\boot.wim" /index:1 /MountDir:"%MOUNT_DIR%"
 
 echo.
-echo [3/6] Injecting Required Packages (WMI, NetFX, Scripting, PowerShell)...
+echo [3/6] Injecting Required Packages (WMI, NetFX, Scripting, PowerShell, StorageWMI)...
 set "OC_PATH=%ADK_PATH%\Windows Preinstallation Environment\amd64\WinPE_OCs"
 
 dism /Add-Package /Image:"%MOUNT_DIR%" /PackagePath:"%OC_PATH%\WinPE-WMI.cab" /Quiet /NoRestart
@@ -78,10 +92,13 @@ dism /Add-Package /Image:"%MOUNT_DIR%" /PackagePath:"%OC_PATH%\en-us\WinPE-Scrip
 dism /Add-Package /Image:"%MOUNT_DIR%" /PackagePath:"%OC_PATH%\WinPE-PowerShell.cab" /Quiet /NoRestart
 dism /Add-Package /Image:"%MOUNT_DIR%" /PackagePath:"%OC_PATH%\en-us\WinPE-PowerShell_en-us.cab" /Quiet /NoRestart
 
+if exist "%OC_PATH%\WinPE-StorageWMI.cab" (
+    dism /Add-Package /Image:"%MOUNT_DIR%" /PackagePath:"%OC_PATH%\WinPE-StorageWMI.cab" /Quiet /NoRestart
+    dism /Add-Package /Image:"%MOUNT_DIR%" /PackagePath:"%OC_PATH%\en-us\WinPE-StorageWMI_en-us.cab" /Quiet /NoRestart
+)
+
 echo.
 echo [4/6] Copying Project Files to WinPE...
-set "PROJECT_DIR=%~dp0"
-if "%PROJECT_DIR:~-1%"=="\" set "PROJECT_DIR=%PROJECT_DIR:~0,-1%"
 xcopy /s /e /y "%PROJECT_DIR%\*" "%MOUNT_DIR%\USB_PasswordDeleter\"
 
 echo.
@@ -100,5 +117,7 @@ echo ========================================================
 call MakeWinPEMedia /UFD "%PE_DIR%" %TARGET_DRIVE%
 
 echo.
-echo Process Completed.
+echo ========================================================
+echo SUCCESS: Bootable WinPE USB is ready on %TARGET_DRIVE%
+echo ========================================================
 pause

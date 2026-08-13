@@ -1,126 +1,154 @@
-# 🚀 Lenovo USB Password Deleter & BIOS Automation Tool
+# 🚀 Lenovo ThinkPad UEFI WinPE Password Deleter & Automation Tool
 
-ระบบจัดการและลบรหัสผ่าน BIOS, Power-On Password และ Hard Disk Password แบบอัตโนมัติสำหรับโน้ตบุ๊ก **Lenovo ThinkPad** (รองรับ L15 Gen 2, X13 Gen 2 และตระกูลใกล้เคียง) ผ่านสภาพแวดล้อม **WinPE (UEFI Boot)** แบบ Zero-Touch 100%
-
----
-
-## 📋 สรุปการทำงานของระบบ
-1. **Zero-Touch RAM Execution**: บูตผ่าน USB แฟลชไดรฟ์ เมื่อโหลดเข้า RAM แล้วสามารถถอด USB ออกไปเสียบเครื่องถัดไปได้ทันที
-2. **ล้างรหัสผ่านครบวงจร (3 Passwords)**:
-   - 🔑 **Supervisor Password (SVP)**: ลบ Master Password หน้า BIOS
-   - 🔑 **Power-On Password (POP)**: ลบรหัสผ่านตอนเปิดเครื่อง
-   - 🔑 **Hard Disk / NVMe Password (HDP)**: ลบรหัสผ่านล็อกไดรฟ์ SSD/HDD
-3. **กำหนดค่า BIOS มาตรฐาน**: ปิด Secure Boot และตั้งลำดับการบูตกลับไปยังฮาร์ดดิสก์หลัก (`HDD0`) อัตโนมัติ
-4. **ความปลอดภัยสูง**: รหัสผ่านจะถูกเข้ารหัส AES-256 ฝังไว้ในตัวบูต ไม่มี Plain-Text หลุดออกไป
+An enterprise-grade, offline UEFI WinPE automation framework designed to remove BIOS passwords, Power-On passwords, and Hard Disk passwords, while standardizing firmware configurations on **Lenovo ThinkPad** laptops (such as L15 Gen 2, X13 Gen 2, and related enterprise models) with 100% Zero-Touch RAM execution.
 
 ---
 
-## 🛠️ อุปกรณ์และสิ่งที่ต้องเตรียม
-1. **USB Flash Drive**: ขนาด 4GB ขึ้นไป (⚠️ **ข้อมูลในแฟลชไดรฟ์จะถูก Format ลบทั้งหมด**)
-2. **เครื่องคอมพิวเตอร์สำหรับสร้าง USB (Windows 10/11)**
-3. **รหัสผ่านเดิมของเครื่องเป้าหมาย**:
-   - **รหัสที่ 1:** Supervisor Password (SVP)
-   - **รหัสที่ 2:** Power-On & Hard Disk Password (ใช้รหัสเดียวกัน)
+## 📋 System Overview & Key Capabilities
+
+1. **Zero-Touch RAM Execution**:
+   - The boot image loads entirely into RAM (`X:\`). Once loaded, technicians can immediately unplug the USB drive and reuse it on the next machine in the assembly line.
+2. **Complete 3-in-1 Password Deletion**:
+   - 🔑 **Supervisor Password (SVP)**: Clears the master BIOS administrative password (`pap`).
+   - 🔑 **Power-On Password (POP)**: Clears the boot authorization prompt (`pop`).
+   - 🔑 **Hard Disk / NVMe Password (HDP)**: Clears the internal storage lock (`hdp`, `hdp1`, `mhp`).
+3. **BIOS Standardization**:
+   - Automatically disables **Secure Boot**.
+   - Restores internal storage (`HDD0`) as the primary boot option.
+4. **AES-256 Encrypted Credential Store**:
+   - Authorization credentials are encrypted with AES-256 before injection into the WinPE image. No plaintext passwords exist in scripts or storage.
+5. **Automated Audit Trail**:
+   - Automatically records machine serial numbers, model types, BIOS versions, and operation outcomes to `audit.csv`.
 
 ---
 
-## 📖 คู่มือการสร้างและใช้งานตั้งแต่เริ่มต้น (Flash Drive ใหม่เอี่ยม)
+## 🛠️ Prerequisites
+
+- **USB Flash Drive**: 4 GB minimum (⚠️ *All existing data on this drive will be formatted and erased*).
+- **Host PC**: Running Windows 10 or Windows 11 to create the WinPE boot media.
+- **Original Credentials**:
+  - `Supervisor Password (SVP)`: Current master BIOS password.
+  - `Power-On & Hard Disk Password`: Current password for power-on and SSD/HDD locks (sharing the same password).
+
+---
+
+## 📖 End-to-End Setup Guide (From a Fresh USB Flash Drive)
 
 ```mermaid
 flowchart TD
-    A[1. ติดตั้ง ADK & WinPE] --> B[2. ฝังรหัสผ่านด้วย Set-Credentials.ps1]
-    B --> C[3. เสียบ USB แล้วรัน setup.bat]
-    C --> D[4. นำ USB ไปบูตเครื่อง ThinkPad F12]
-    D --> E[5. ถอด USB เมื่อขึ้นข้อความเตือน]
-    E --> F[6. ระบบลบรหัสผ่าน & ปิดเครื่องอัตโนมัติ]
+    A["1. Install ADK & WinPE<br/>(Install-ADK.ps1)"] --> B["2. Store Encrypted Passwords<br/>(Set-Credentials.ps1)"]
+    B --> C["3. Insert USB & Run Builder<br/>(setup.bat as Admin)"]
+    C --> D["4. Boot Target ThinkPad<br/>(Press F12 at power on)"]
+    D --> E["5. Unplug USB When Prompted<br/>(Zero-Touch RAM execution)"]
+    E --> F["6. Automatic Password Deletion<br/>& Auto Shutdown"]
 ```
 
-### ขั้นตอนที่ 1: ติดตั้งเครื่องมือ Windows ADK (ทำครั้งเดียวต่อเครื่องคอมพิวเตอร์)
-หากเครื่องของคุณยังไม่ได้ติดตั้ง Windows ADK ให้เปิด PowerShell แล้วรันคำสั่ง:
-```powershell
-powershell -ExecutionPolicy Bypass -File .\Install-ADK.ps1
-```
-*(รอประมาณ 5–10 นาทีจนกว่าการติดตั้งเสร็จสมบูรณ์)*
+### Step 1: Install Windows ADK & WinPE Add-on (Host PC)
+If the host PC does not already have the Windows ADK and WinPE Add-on installed:
+1. Open PowerShell as Administrator in the repository folder.
+2. Run the automated installer:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\Install-ADK.ps1
+   ```
+3. Wait for the download and silent installation to finish (approx. 5–10 minutes).
 
 ---
 
-### ขั้นตอนที่ 2: ตั้งค่ารหัสผ่านที่ต้องการลบ (`Set-Credentials.ps1`)
-1. รันสคริปต์สำหรับเข้ารหัสผ่าน PowerShell:
+### Step 2: Encrypt Target Passwords (`Set-Credentials.ps1`)
+1. Run the credential generator script:
    ```powershell
    powershell -ExecutionPolicy Bypass -File .\Lenovo\Tools\Set-Credentials.ps1
    ```
-   *(หรือคลิกขวาที่ไฟล์ `Set-Credentials.ps1` แล้วเลือก **Run with PowerShell**)*
-2. กรอกรหัสผ่าน 2 ครั้งตามหน้าจอ:
-   - **[1/2] Supervisor Password**: กรอกรหัส Master BIOS
-   - **[2/2] Power-On & Hard Disk Password**: กรอกรหัสเปิดเครื่อง/ฮาร์ดดิสก์
-3. ระบบจะเข้ารหัส AES-256 และบันทึกลงในโฟลเดอร์ `Config\supervisor.txt` และ `Config\pop_hdd.txt` อัตโนมัติ
+   *(Or right-click `Set-Credentials.ps1` and select **Run with PowerShell**)*.
+2. Enter the passwords when prompted:
+   - **[1/2] Supervisor Password**: Enter the current master BIOS password.
+   - **[2/2] Power-On & Hard Disk Password**: Enter the current boot/storage password.
+3. The script securely writes encrypted blobs to `Config\supervisor.txt` and `Config\pop_hdd.txt`.
 
 ---
 
-### ขั้นตอนที่ 3: เสียบ Flash Drive และสร้างตัวบูต (`setup.bat`)
-1. เสียบ **USB Flash Drive** เข้าเครื่องคอมพิวเตอร์
-2. คลิกขวาที่ไฟล์ **`setup.bat`** แล้วเลือก **"Run as administrator" (เรียกใช้งานในฐานะผู้ดูแลระบบ)**
-3. สคริปต์จะค้นหาไดรฟ์ USB และแสดงข้อความยืนยัน
-4. กด Enter เพื่อเริ่มสร้างตัวบูต WinPE ระบบจะทำการ:
-   - ดึงไฟล์ WinPE และฉีด Packages (WMI, PowerShell, NetFX, Scripting)
-   - ก๊อปปี้ไฟล์สคริปต์และ Config รหัสผ่านลงในตัวบูต
-   - Format และเขียน WinPE ลง USB Flash Drive
-5. เมื่อเสร็จสิ้นจะขึ้นข้อความ `Process Completed.` สามารถดึง USB ออกได้
+### Step 3: Build the Bootable USB Drive (`setup.bat`)
+1. Plug your **USB Flash Drive** into the Host PC.
+2. **Right-click `setup.bat`** and choose **"Run as administrator"**.
+3. The script will automatically:
+   - Detect the removable USB drive letter (e.g., `G:`).
+   - Mount the base `boot.wim` image.
+   - Inject required WinPE optional components (`WMI`, `NetFX`, `Scripting`, `PowerShell`, `StorageWMI`).
+   - Copy all automation scripts and encrypted credentials into the image.
+   - Configure `startnet.cmd` to launch `Main.ps1` automatically on boot.
+   - Format and write the bootable image to the USB drive.
+4. When finished, you will see `SUCCESS: Bootable WinPE USB is ready`.
 
 ---
 
-### ขั้นตอนที่ 4: นำ Flash Drive ไปรันบนเครื่องเป้าหมาย (Lenovo ThinkPad)
-1. นำ USB Flash Drive ไปเสียบที่เครื่อง Lenovo ThinkPad เป้าหมาย
-2. กดปุ่มเปิดเครื่อง แล้วกดปุ่ม **F12** รัวๆ เพื่อเข้า **Boot Menu**
-3. เลือกบูตจากรายการ **USB HDD**
-4. เมื่อเข้าสู่หน้าต่างสีดำ WinPE ระบบจะตรวจจับอุปกรณ์และขึ้นข้อความ:
+### Step 4: Deploy on Target Laptops (Lenovo ThinkPad)
+1. Plug the USB Flash Drive into the target ThinkPad laptop.
+2. Power on the laptop and immediately press **F12** repeatedly to enter the **Boot Menu**.
+3. Select **USB HDD** from the boot list.
+4. Once the WinPE terminal loads, a yellow banner will appear:
    ```text
-   >>> PLEASE UNPLUG THE USB DRIVE NOW <<<
+   ================================================
+           PLEASE REMOVE USB FLASH DRIVE
+           กรุณาถอด Flash Drive ออกจากเครื่อง
+   ================================================
    ```
-5. **ดึง Flash Drive ออกทันที** (สามารถนำแฟลชไดรฟ์ไปเสียบเครื่องถัดไปต่อได้เลย)
-6. ระบบจะประมวลผลต่อใน RAM โดยอัตโนมัติ:
-   - ปรับค่า BIOS และปิด Secure Boot
-   - สั่งลบ Power-On Password
-   - สั่งลบ Hard Disk / NVMe Password
-   - สั่งลบ Supervisor Password
-   - ปรับลำดับการบูตกลับไปยัง internal drive
-   - ตรวจสอบความสมบูรณ์ (Verification)
-7. เมื่อขึ้นแถบสีเขียว **`SUCCESS`** เครื่องจะนับถอยหลัง 5 วินาทีและ **ปิดเครื่องเองโดยอัตโนมัติ (Shutdown)**
+5. **Unplug the USB Flash Drive immediately**. You can plug it into the next machine right away.
+6. The script continues running automatically in RAM:
+   - Disables Secure Boot.
+   - Restores internal boot priority (`HDD0`).
+   - Clears Power-On Password.
+   - Clears Hard Disk / NVMe Password.
+   - Clears Supervisor Password.
+   - Runs post-configuration verification.
+7. Upon displaying the green **`SUCCESS`** screen, the laptop will automatically shut down in 5 seconds.
 
 ---
 
-## 📁 โครงสร้างโปรเจกต์ (Project Structure)
+## 📁 Repository Structure
 
 ```text
 USB_PasswordDeleter/
-├── Config/                      # โฟลเดอร์เก็บ Credentials ที่เข้ารหัสแล้ว (ไม่ถูก Push ขึ้น Git)
-│   ├── supervisor.txt           # รหัส Supervisor เข้ารหัส AES-256
-│   └── pop_hdd.txt              # รหัส Power-On & HDD เข้ารหัส AES-256
+├── Config/                      # Local encrypted credentials (git-ignored for security)
+│   ├── supervisor.txt           # AES-256 encrypted Supervisor Password
+│   └── pop_hdd.txt              # AES-256 encrypted Power-On & HDD Password
 ├── Lenovo/
 │   └── Tools/
-│       └── Set-Credentials.ps1  # สคริปต์กรอกและเข้ารหัสผ่าน
+│       └── Set-Credentials.ps1  # Tool to generate AES-256 encrypted credential files
 ├── Scripts/
-│   ├── Main.ps1                 # สคริปต์หลักที่รันอัตโนมัติบน WinPE
-│   ├── Detect-Hardware.ps1      # ตรวจสอบรุ่นเครื่อง (Machine Type)
-│   ├── Detect-Configuration.ps1 # อ่านค่าสถานะ BIOS/WMI ปัจจุบัน
-│   ├── Detect-USBRemoval.ps1    # ลูปตรวจจับการถอด USB ก่อนเริ่มงาน
-│   ├── Apply-Configuration.ps1  # โมดูลสั่งล้างรหัสผ่านและตั้งค่า BIOS
-│   ├── BootOrder.ps1            # โมดูลกู้คืนลำดับการบูต HDD0
-│   ├── Verify-Configuration.ps1 # โมดูลตรวจสอบผลลัพธ์หลังแก้ไข
-│   └── Logging.ps1              # โมดูลบันทึก Audit Log
-├── CheatSheet.md                # รวมคำสั่งลัด WMI และคู่มือการบิลด์ Manual
-├── Install-ADK.ps1              # ตัวช่วยติดตั้ง Windows ADK อัตโนมัติ
-├── README.md                    # คู่มือการใช้งานฉบับสมบูรณ์
-├── Roadmap.md                   # แผนการพัฒนาระบบ
-└── setup.bat                    # ตัวสร้าง USB Bootable แบบคลิกเดียว
+│   ├── Main.ps1                 # Master WinPE orchestrator
+│   ├── Detect-Hardware.ps1      # Queries machine type, serial, and specs
+│   ├── Detect-Configuration.ps1 # Queries active BIOS WMI settings and password states
+│   ├── Detect-USBRemoval.ps1    # Polling loop detecting USB extraction for zero-touch workflow
+│   ├── Apply-Configuration.ps1  # Core module executing WMI password deletion and BIOS modifications
+│   ├── BootOrder.ps1            # Restores internal drive (HDD0) boot priority
+│   ├── Verify-Configuration.ps1 # Audits post-execution state to ensure clean configuration
+│   └── Logging.ps1              # Writes execution telemetry to audit.csv
+├── CheatSheet.md                # Quick manual reference and WMI query cheatsheet
+├── Install-ADK.ps1              # Automated Windows ADK and WinPE downloader/installer
+├── README.md                    # Comprehensive documentation and deployment guide
+├── Roadmap.md                   # Development roadmap
+└── setup.bat                    # One-click Admin build script for USB creation
 ```
 
 ---
 
-## ⚠️ การแก้ไขปัญหา (Troubleshooting)
+## 🔍 Supported Machine Types
 
-| อาการ | สาเหตุที่เป็นไปได้ | แนวทางแก้ไข |
+The default filter in [Detect-Hardware.ps1](file:///c:/Users/MewMew/Desktop/Co-op/USB_PasswordDeleter/Scripts/Detect-Hardware.ps1) and [Main.ps1](file:///c:/Users/MewMew/Desktop/Co-op/USB_PasswordDeleter/Scripts/Main.ps1) targets the following Lenovo Machine Types:
+- `20X3`, `20X4` (ThinkPad L15 Gen 2 Intel)
+- `20U7`, `20U8` (ThinkPad L15 Gen 1 AMD / Intel)
+- `20WK`, `20WL` (ThinkPad X13 Gen 2 Intel)
+- `20XH`, `20XJ` (ThinkPad X13 Gen 2 AMD)
+
+*To add more models, append the 4-character Machine Type to `$supportedModels` in `Scripts\Main.ps1`.*
+
+---
+
+## ❓ Troubleshooting
+
+| Issue / Symptom | Possible Cause | Resolution |
 | :--- | :--- | :--- |
-| **ขึ้นแถบแดง `MANUAL REQUIRED: Unsupported Machine Type`** | เครื่องเป้าหมายไม่ใช่รุ่นที่อนุญาตในลิสต์ (L15/X13 Gen 2) | ตรวจสอบ Machine Type ใน `Scripts\Main.ps1` และเพิ่มรุ่นเข้าไปหากต้องการรองรับ |
-| **ขึ้น `Configuration failed` หรือ Password ไม่ถูกลบ** | รหัสผ่านเดิมที่กรอกใน `Set-Credentials.ps1` ไม่ถูกต้อง | รัน `Set-Credentials.ps1` ใหม่ แล้วกรอกรหัสเดิมให้ถูกต้อง จากนั้นรัน `setup.bat` ใหม่ |
-| **รัน `setup.bat` แล้วขึ้น Error สิทธิ์** | ไม่ได้เปิดด้วยสิทธิ์ Administrator | คลิกขวาที่ `setup.bat` -> เลือก **Run as administrator** |
+| **Red Banner: `MANUAL REQUIRED: Unsupported Machine Type`** | The laptop is not in the approved model list. | Verify the Machine Type on the bottom label or add it to `$supportedModels` in `Scripts\Main.ps1`. |
+| **`Configuration failed` or passwords still active** | Incorrect original passwords entered during setup. | Run `Set-Credentials.ps1` again with the correct existing passwords, then re-run `setup.bat`. |
+| **`setup.bat` fails with Administrator permission error** | Script was launched without elevated privileges. | Right-click `setup.bat` and select **"Run as administrator"**. |
+| **USB detection stuck on boot screen** | An internal USB device (e.g. card reader) is detected as removable. | Press **Enter** or **Spacebar** on the laptop keyboard to manually bypass the check. |

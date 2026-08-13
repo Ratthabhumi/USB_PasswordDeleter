@@ -62,11 +62,17 @@ function Set-LenovoFirmwareConfig {
         # 1. Apply Corporate BIOS Settings using Supervisor Password
         # ----------------------------------------------------
         Write-Host "  -> Configuring Secure Boot (Disable)..."
-        $cmdSb = "SecureBoot,Disable,$svpPassword,ascii,us"
+        $cmdSb = if (-not [string]::IsNullOrEmpty($svpPassword)) { "SecureBoot,Disable,$svpPassword,ascii,us" } else { "SecureBoot,Disable,,ascii,us" }
         Invoke-CimMethod -InputObject $setWmi -MethodName SetBiosSetting -Arguments @{Parameter=$cmdSb} | Out-Null
 
         # ----------------------------------------------------
-        # 2. Clear Power-On Password (POP)
+        # 2. Restore Internal Boot Priority (HDD0) BEFORE clearing SVP
+        # ----------------------------------------------------
+        Write-Host "  -> Restoring internal boot priority (HDD0)..."
+        Set-InternalBootPriority -SupervisorPassword $svpPassword | Out-Null
+
+        # ----------------------------------------------------
+        # 3. Clear Power-On Password (POP)
         # ----------------------------------------------------
         Write-Host "  -> Clearing Power-On Password..."
         if (-not [string]::IsNullOrEmpty($popHddPassword) -and $null -ne $setPwdWmi) {
@@ -74,14 +80,14 @@ function Set-LenovoFirmwareConfig {
             $res = Invoke-CimMethod -InputObject $setPwdWmi -MethodName SetBiosPassword -Arguments @{Parameter=$cmdPopPwd}
             Write-Host "     Result (SetBiosPassword pop): $($res.return)"
         }
-        # Fallback/Secondary attempt using Supervisor password to disable POP
+        # Fallback using Supervisor Password
         if (-not [string]::IsNullOrEmpty($svpPassword)) {
             $cmdPopSetting = "PowerOnPassword,Disable,$svpPassword,ascii,us"
-            Invoke-CimMethod -InputObject $setWmi -MethodName SetBiosSetting -Arguments @{Parameter=$cmdPopSetting} | Out-Null
+            Invoke-CimMethod -InputObject $setWmi -MethodName SetBiosSetting -Arguments @{Parameter=$cmdPopSetting} -ErrorAction SilentlyContinue | Out-Null
         }
 
         # ----------------------------------------------------
-        # 3. Clear Hard Disk / SSD Password (HDP)
+        # 4. Clear Hard Disk / SSD Password (HDP)
         # ----------------------------------------------------
         Write-Host "  -> Clearing Hard Disk / NVMe Password..."
         if (-not [string]::IsNullOrEmpty($popHddPassword) -and $null -ne $setPwdWmi) {
@@ -95,20 +101,21 @@ function Set-LenovoFirmwareConfig {
             $resHdp1 = Invoke-CimMethod -InputObject $setPwdWmi -MethodName SetBiosPassword -Arguments @{Parameter=$cmdHdp1}
             Write-Host "     Result (SetBiosPassword hdp1): $($resHdp1.return)"
 
-            # Try Master HDP (MHP) if applicable
+            # Try Master HDP (MHP)
             $cmdMhp = "mhp,$popHddPassword,,,ascii,us"
             $resMhp = Invoke-CimMethod -InputObject $setPwdWmi -MethodName SetBiosPassword -Arguments @{Parameter=$cmdMhp}
             Write-Host "     Result (SetBiosPassword mhp): $($resMhp.return)"
         }
 
         # ----------------------------------------------------
-        # 4. Save Applied Settings before resetting Supervisor Password
+        # 5. Commit BIOS Setting Changes before deleting Supervisor Password
         # ----------------------------------------------------
-        Write-Host "  -> Committing BIOS setting changes..."
-        Invoke-CimMethod -InputObject $saveWmi -MethodName SaveBiosSettings -Arguments @{Parameter="$svpPassword,ascii,us"} | Out-Null
+        Write-Host "  -> Committing intermediate BIOS settings..."
+        $saveParam = if (-not [string]::IsNullOrEmpty($svpPassword)) { "$svpPassword,ascii,us" } else { ",ascii,us" }
+        Invoke-CimMethod -InputObject $saveWmi -MethodName SaveBiosSettings -Arguments @{Parameter=$saveParam} | Out-Null
 
         # ----------------------------------------------------
-        # 5. Clear Supervisor Password (PAP)
+        # 6. Clear Supervisor Password (PAP) as the FINAL step
         # ----------------------------------------------------
         Write-Host "  -> Clearing Supervisor / Master BIOS Password..."
         if (-not [string]::IsNullOrEmpty($svpPassword) -and $null -ne $setPwdWmi) {
@@ -120,7 +127,7 @@ function Set-LenovoFirmwareConfig {
         # Final save
         Invoke-CimMethod -InputObject $saveWmi -MethodName SaveBiosSettings -Arguments @{Parameter=",ascii,us"} -ErrorAction SilentlyContinue | Out-Null
         
-        Write-Host "[ OK ] Configuration and password deletion routine finished." -ForegroundColor Green
+        Write-Host "[ OK ] Configuration and password deletion routine completed." -ForegroundColor Green
     } catch {
         Write-Warning "Failed to apply BIOS settings: $($_.Exception.Message)"
         $success = $false

@@ -1,23 +1,34 @@
 function Set-InternalBootPriority {
-    $password = Get-SecureCredential # Uses the same helper from Apply-Configuration.ps1
-    if ($null -eq $password) {
-        return $false
+    param(
+        [Parameter(Mandatory=$false)]
+        [string]$SupervisorPassword = ""
+    )
+
+    $password = if (-not [string]::IsNullOrEmpty($SupervisorPassword)) {
+        $SupervisorPassword
+    } else {
+        Get-SecureCredential -CredentialName "supervisor"
     }
 
-    Write-Host "Restoring normal internal-drive boot priority..."
+    Write-Host "Restoring normal internal-drive boot priority (HDD0)..." -ForegroundColor Cyan
     try {
         $setWmi = Get-CimInstance -Namespace "root\wmi" -ClassName Lenovo_SetBiosSetting
         $saveWmi = Get-CimInstance -Namespace "root\wmi" -ClassName Lenovo_SaveBiosSettings
 
-        # Standard Lenovo BootOrder strings usually include: USBCD, USBHDD, HDD0, PCILAN
-        # We enforce HDD0 (Internal Drive) to be the first option.
+        # Enforce internal drive (HDD0 / NVMe) as the first boot option
         $newBootOrder = "HDD0:USBCD:USBHDD:PCILAN"
         
-        $cmd = "BootOrder,$newBootOrder,$password,ascii,us"
+        $cmd = if (-not [string]::IsNullOrEmpty($password)) {
+            "BootOrder,$newBootOrder,$password,ascii,us"
+        } else {
+            "BootOrder,$newBootOrder,,ascii,us"
+        }
+
         Invoke-CimMethod -InputObject $setWmi -MethodName SetBiosSetting -Arguments @{Parameter=$cmd} | Out-Null
         
         # Save Boot Order changes
-        Invoke-CimMethod -InputObject $saveWmi -MethodName SaveBiosSettings -Arguments @{Parameter="$password,ascii,us"} | Out-Null
+        $saveParam = if (-not [string]::IsNullOrEmpty($password)) { "$password,ascii,us" } else { ",ascii,us" }
+        Invoke-CimMethod -InputObject $saveWmi -MethodName SaveBiosSettings -Arguments @{Parameter=$saveParam} | Out-Null
         
         Write-Host "[ OK ] Boot priority restored to internal drive." -ForegroundColor Green
         Remove-Variable -Name password -ErrorAction SilentlyContinue

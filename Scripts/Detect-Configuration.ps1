@@ -3,12 +3,12 @@ function Get-LenovoFirmwareConfig {
         $biosSettings = Get-CimInstance -Namespace "root\wmi" -ClassName Lenovo_BiosSetting -ErrorAction Stop
         
         $config = [PSCustomObject]@{
-            BootOrder = "Unknown"
-            FirmwareAuth = "Unknown"
-            SecureBoot = "Unknown"
-            PasswordState = "Unknown"
-            PowerOnPassword = "Unknown"
-            HardDiskPassword = "Unknown"
+            BootOrder         = "Unknown"
+            FirmwareAuth      = "Unknown"
+            SecureBoot        = "Unknown"
+            PasswordState     = "Unknown"
+            PowerOnPassword   = "Unknown"
+            HardDiskPassword  = "Unknown"
         }
 
         foreach ($setting in $biosSettings) {
@@ -32,11 +32,22 @@ function Get-LenovoFirmwareConfig {
             }
             if ($setting.CurrentSetting -match "^HardDisk2Password,") {
                 $val = $setting.CurrentSetting -replace "^HardDisk2Password," , ""
-                if ($config.HardDiskPassword -eq "Unknown" -or $config.HardDiskPassword -eq "") {
+                if ($config.HardDiskPassword -eq "Unknown" -or [string]::IsNullOrEmpty($config.HardDiskPassword)) {
                     $config.HardDiskPassword = $val
                 }
             }
         }
+
+        # Supplementary check via Lenovo_BiosPasswordSettings
+        try {
+            $pwdSettings = Get-CimInstance -Namespace "root\wmi" -ClassName Lenovo_BiosPasswordSettings -ErrorAction SilentlyContinue
+            if ($null -ne $pwdSettings -and $null -ne $pwdSettings.PasswordState) {
+                if ($config.PasswordState -eq "Unknown" -or [string]::IsNullOrEmpty($config.PasswordState)) {
+                    $config.PasswordState = "$($pwdSettings.PasswordState)"
+                }
+            }
+        } catch {}
+
         return $config
     } catch {
         Write-Warning "Failed to query Lenovo WMI namespace. Ensure you are running on supported Lenovo hardware with WinPE-WMI."
