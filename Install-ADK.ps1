@@ -1,10 +1,9 @@
 $ErrorActionPreference = 'Stop'
 
-# ตรวจสอบสิทธิ์ Administrator
+# ตรวจสอบสิทธิ์ Administrator และขอสิทธิ์อัตโนมัติหากยังไม่มี
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Host "[ERROR] Please run this script as Administrator!" -ForegroundColor Red
-    Write-Host "คลิกขวาที่ไฟล์นี้แล้วเลือก 'Run with PowerShell' หรือเปิด PowerShell แบบ Run as Admin แล้วรันไฟล์นี้ครับ"
-    Start-Sleep -Seconds 10
+    Write-Host "Requesting Administrator privileges..." -ForegroundColor Yellow
+    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
     exit
 }
 
