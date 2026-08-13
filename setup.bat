@@ -74,9 +74,7 @@ cd /d "%PROJECT_DIR%"
 set "PE_DIR=C:\WinPE_amd64"
 set "MOUNT_DIR=%PE_DIR%\mount"
 
-:: Comprehensive cleanup of previous builds and locked mountpoints
-echo.
-echo Cleaning up previous WinPE builds and releasing locks...
+:: Comprehensive cleanup of previous builds and releasing locks...
 dism /Unmount-Image /MountDir:"%MOUNT_DIR%" /discard >nul 2>&1
 dism /Unmount-Image /MountDir:"C:\WinPE_Build\mount" /discard >nul 2>&1
 dism /Cleanup-Wim >nul 2>&1
@@ -94,10 +92,10 @@ rd /s /q "%PE_DIR%" >nul 2>&1
 if exist "%PE_DIR%" (
     echo [INFO] C:\WinPE_amd64 is held by OS registry lock. Using clean workspace: C:\WinPE_Build
     set "PE_DIR=C:\WinPE_Build"
-    set "MOUNT_DIR=%PE_DIR%\mount"
-    takeown /F "%PE_DIR%" /A /R /D Y >nul 2>&1
-    icacls "%PE_DIR%" /grant Administrators:F /T /C /Q >nul 2>&1
-    rd /s /q "%PE_DIR%" >nul 2>&1
+    set "MOUNT_DIR=C:\WinPE_Build\mount"
+    takeown /F "C:\WinPE_Build" /A /R /D Y >nul 2>&1
+    icacls "C:\WinPE_Build" /grant Administrators:F /T /C /Q >nul 2>&1
+    rd /s /q "C:\WinPE_Build" >nul 2>&1
 )
 
 echo.
