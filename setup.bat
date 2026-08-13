@@ -81,6 +81,9 @@ dism /Unmount-Image /MountDir:"%MOUNT_DIR%" /discard >nul 2>&1
 dism /Cleanup-Wim >nul 2>&1
 dism /Cleanup-Mountpoints >nul 2>&1
 
+:: Unload all dangling WinPE registry hives from HKLM
+powershell -NoProfile -Command "Get-ChildItem 'HKLM:\' -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'WinPE' } | ForEach-Object { $sub = $_.Name -replace '^HKEY_LOCAL_MACHINE\\',''; reg unload \"HKLM\$sub\" 2>&1 | Out-Null }"
+
 if exist "%PE_DIR%" (
     rd /s /q "%PE_DIR%" >nul 2>&1
 )
