@@ -1,0 +1,17 @@
+# Credentials & Secrets
+Config/supervisor.txt
+Config/*.txt
+!Config/.gitkeep
+
+# Logs & WinPE temporary artifacts
+*.log
+Logs/
+WinPE_amd64/
+*.wim
+*.iso
+
+# OS & Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
