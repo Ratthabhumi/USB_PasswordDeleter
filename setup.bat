@@ -8,8 +8,10 @@ echo ========================================================
 :: Check for Administrator privileges
 net session >nul 2>&1
 if %errorLevel% NEQ 0 (
+    echo.
     echo [ERROR] Please run this script as Administrator.
     echo Right-click setup.bat and select "Run as administrator".
+    echo.
     pause
     exit /b 1
 )
@@ -22,7 +24,7 @@ if "%PROJECT_DIR:~-1%"=="\" set "PROJECT_DIR=%PROJECT_DIR:~0,-1%"
 if not exist "%PROJECT_DIR%\Config\supervisor.txt" (
     echo.
     echo [WARNING] No credentials found in Config\supervisor.txt!
-    echo If the target machines require password deletion, please run:
+    echo If target machines require password deletion, please run:
     echo   powershell -File Lenovo\Tools\Set-Credentials.ps1
     echo before building the USB.
     echo.
@@ -36,7 +38,9 @@ for /f "usebackq tokens=*" %%A in (`powershell -NoProfile -Command "Get-Volume |
 )
 
 if "%TARGET_DRIVE%"=="" (
+    echo.
     echo [ERROR] No USB Flash Drive detected! Please insert a USB drive and try again.
+    echo.
     pause
     exit /b 1
 )
@@ -52,8 +56,10 @@ pause
 :: Locate ADK
 set "ADK_PATH=C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit"
 if not exist "%ADK_PATH%\Deployment Tools\DandISetEnv.bat" (
+    echo.
     echo [ERROR] Windows ADK not found at default location.
     echo Please run Install-ADK.ps1 to install Windows ADK and WinPE add-on.
+    echo.
     pause
     exit /b 1
 )
@@ -64,20 +70,44 @@ call "%ADK_PATH%\Deployment Tools\DandISetEnv.bat"
 set "PE_DIR=C:\WinPE_amd64"
 set "MOUNT_DIR=%PE_DIR%\mount"
 
-:: Clean up previous build if exists
+:: Comprehensive cleanup of previous builds and locked mountpoints
+echo.
+echo Cleaning up previous WinPE builds and releasing file locks...
+dism /Unmount-Image /MountDir:"%MOUNT_DIR%" /discard >nul 2>&1
+dism /Cleanup-Wim >nul 2>&1
+dism /Cleanup-Mountpoints >nul 2>&1
+
 if exist "%PE_DIR%" (
-    echo Cleaning up previous WinPE build...
-    dism /Unmount-Image /MountDir:"%MOUNT_DIR%" /discard >nul 2>&1
-    rd /s /q "%PE_DIR%"
+    rd /s /q "%PE_DIR%" >nul 2>&1
+)
+
+if exist "%PE_DIR%" (
+    echo.
+    echo [ERROR] Unable to remove existing directory "%PE_DIR%".
+    echo Some files are locked by another process (e.g. File Explorer or Antivirus).
+    echo Please close any open File Explorer windows, wait 5 seconds, and try again.
+    echo.
+    pause
+    exit /b 1
 )
 
 echo.
 echo [1/6] Copying base WinPE files...
 call copype amd64 "%PE_DIR%"
+if %errorLevel% NEQ 0 (
+    echo [ERROR] copype failed to initialize WinPE directory.
+    pause
+    exit /b 1
+)
 
 echo.
 echo [2/6] Mounting WinPE image...
 dism /Mount-Image /ImageFile:"%PE_DIR%\media\sources\boot.wim" /index:1 /MountDir:"%MOUNT_DIR%"
+if %errorLevel% NEQ 0 (
+    echo [ERROR] DISM failed to mount boot.wim.
+    pause
+    exit /b 1
+)
 
 echo.
 echo [3/6] Injecting Required Packages (WMI, NetFX, Scripting, PowerShell, StorageWMI)...
@@ -99,7 +129,12 @@ if exist "%OC_PATH%\WinPE-StorageWMI.cab" (
 
 echo.
 echo [4/6] Copying Project Files to WinPE...
-xcopy /s /e /y "%PROJECT_DIR%\*" "%MOUNT_DIR%\USB_PasswordDeleter\"
+xcopy /s /e /y "%PROJECT_DIR%\*" "%MOUNT_DIR%\USB_PasswordDeleter\" >nul
+if %errorLevel% NEQ 0 (
+    echo [ERROR] Failed to copy project files to WinPE image.
+    pause
+    exit /b 1
+)
 
 echo.
 echo [5/6] Configuring startup script...
@@ -108,16 +143,25 @@ echo powershell.exe -ExecutionPolicy Bypass -File X:\USB_PasswordDeleter\Scripts
 echo.
 echo [6/6] Unmounting and saving image...
 dism /Unmount-Image /MountDir:"%MOUNT_DIR%" /commit
+if %errorLevel% NEQ 0 (
+    echo [ERROR] DISM failed to commit and unmount image.
+    pause
+    exit /b 1
+)
 
 echo.
 echo ========================================================
 echo Building USB Boot Media on %TARGET_DRIVE%
 echo ========================================================
-:: MakeWinPEMedia will prompt to confirm formatting
 call MakeWinPEMedia /UFD "%PE_DIR%" %TARGET_DRIVE%
+if %errorLevel% NEQ 0 (
+    echo [ERROR] MakeWinPEMedia failed to write to %TARGET_DRIVE%.
+    pause
+    exit /b 1
+)
 
 echo.
 echo ========================================================
-echo SUCCESS: Bootable WinPE USB is ready on %TARGET_DRIVE%
+echo SUCCESS: Bootable WinPE USB is ready on %TARGET_DRIVE%!
 echo ========================================================
 pause
