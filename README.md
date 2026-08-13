@@ -127,7 +127,8 @@ USB_PasswordDeleter/
 ├── Install-ADK.ps1              # Automated Windows ADK and WinPE downloader/installer
 ├── README.md                    # Comprehensive documentation and deployment guide
 ├── Roadmap.md                   # Development roadmap
-└── setup.bat                    # One-click Admin build script for USB creation
+├── setup.bat                    # One-click Admin build script for USB creation
+└── Clean-USB.bat                # Utility to wipe and restore glitched/locked USB flash drives
 ```
 
 ---
@@ -152,3 +153,4 @@ The default filter in [Detect-Hardware.ps1](file:///c:/Users/MewMew/Desktop/Co-o
 | **`Configuration failed` or passwords still active** | Incorrect original passwords entered during setup. | Run `Set-Credentials.ps1` again with the correct existing passwords, then re-run `setup.bat`. |
 | **`setup.bat` fails with Administrator permission error** | Script was launched without elevated privileges. | Right-click `setup.bat` and select **"Run as administrator"**. |
 | **USB detection stuck on boot screen** | An internal USB device (e.g. card reader) is detected as removable. | Press **Enter** or **Spacebar** on the laptop keyboard to manually bypass the check. |
+| **`setup.bat` fails during USB copy/format** | The USB partition table is corrupted or locked by another process. | Right-click `Clean-USB.bat` -> **"Run as administrator"** to completely wipe the flash drive, then re-run `setup.bat`. |

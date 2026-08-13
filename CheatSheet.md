@@ -29,9 +29,13 @@ echo powershell.exe -ExecutionPolicy Bypass -File X:\USB_PasswordDeleter\Scripts
 :: 6. Unmount and Save
 Dism /Unmount-Image /MountDir:"C:\WinPE_amd64\mount" /commit
 
-:: 7. Create USB (Replace G: with your USB drive letter)
-MakeWinPEMedia /UFD C:\WinPE_amd64 G:
+:: 7. Format and Create USB (Bypass MakeWinPEMedia bug)
+xcopy /s /e /y /h /i "C:\WinPE_amd64\media\*" "G:\"
+"C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\BCDBoot\bootsect.exe" /nt60 G: /force /mbr
 ```
+
+> [!TIP]
+> **Corrupted USB Drive?** If formatting fails or DiskPart gets locked, use the included `Clean-USB.bat` script (Run as Admin) to completely wipe and restore the flash drive's partition table.
 
 ## 3. Useful Lenovo WMI Queries
 Read all current settings:
