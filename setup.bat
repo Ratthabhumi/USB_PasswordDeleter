@@ -14,19 +14,22 @@ if %errorLevel% NEQ 0 (
     exit /b 1
 )
 
-:: Get target drive letter from argument or prompt
-set "TARGET_DRIVE=%~1"
-if "%TARGET_DRIVE%"=="" (
-    set /p "TARGET_DRIVE=Enter the Target USB Drive Letter (e.g. D): "
+:: Get target drive letter automatically
+echo Scanning for Removable USB Drives...
+set "TARGET_DRIVE="
+for /f "usebackq tokens=*" %%A in (`powershell -NoProfile -Command "Get-Volume | Where-Object { $_.DriveType -eq 'Removable' -and $_.DriveLetter -ne $null } | Select-Object -ExpandProperty DriveLetter -First 1"`) do (
+    set "TARGET_DRIVE=%%A:"
 )
 
-:: Remove colon and add it back to ensure format is D:
-set "TARGET_DRIVE=%TARGET_DRIVE::=%"
-set "TARGET_DRIVE=%TARGET_DRIVE%:"
+if "%TARGET_DRIVE%"=="" (
+    echo [ERROR] No USB Flash Drive detected! Please insert a USB drive and try again.
+    pause
+    exit /b 1
+)
 
 echo.
-echo Target USB Drive is %TARGET_DRIVE%
-echo.
+echo ========================================================
+echo Auto-Detected USB Drive: %TARGET_DRIVE%
 echo ========================================================
 echo WARNING: ALL DATA ON %TARGET_DRIVE% WILL BE ERASED!
 echo ========================================================
