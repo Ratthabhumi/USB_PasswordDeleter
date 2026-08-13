@@ -15,3 +15,7 @@ WinPE_amd64/
 Thumbs.db
 .vscode/
 .idea/
+
+# Daily logs & documentation drafts
+USB_PasswordDeleter_*.md
+
