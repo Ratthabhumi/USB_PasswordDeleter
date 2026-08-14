@@ -27,14 +27,28 @@ function Write-AuditLog {
     
     $logLine | Out-File $ramLogPath -Append -Encoding UTF8
     
-    # Attempt to copy to internal disk if available (e.g. C: or D:)
-    # Because WinPE is volatile (X: drive is lost on shutdown)
-    $internalLogVol = Get-Volume | Where-Object { $_.DriveType -eq 'Fixed' -and $_.DriveLetter -ne $null } | Select-Object -First 1
-    if ($null -ne $internalLogVol) {
-        $internalPath = "$($internalLogVol.DriveLetter):\Logs"
-        if (-not (Test-Path $internalPath)) { 
-            New-Item -ItemType Directory -Path $internalPath -Force | Out-Null 
+    # Save directly to the USB Flash Drive to accumulate logs
+    $usbVol = Get-Volume | Where-Object { $_.DriveType -eq 'Removable' -and $_.DriveLetter -ne $null } | Select-Object -First 1
+    
+    if ($null -ne $usbVol) {
+        $usbLogPath = "$($usbVol.DriveLetter):\audit.csv"
+        
+        # If the file doesn't exist on USB yet, add the header
+        if (-not (Test-Path $usbLogPath)) {
+            "Timestamp,Serial,MachineType,Model,BIOSVersion,Storage,Result,Error" | Out-File $usbLogPath -Encoding UTF8
         }
-        Copy-Item $ramLogPath -Destination "$internalPath\audit.csv" -Force -ErrorAction SilentlyContinue
+        
+        # Append the new log line to the USB file
+        $logLine | Out-File $usbLogPath -Append -Encoding UTF8
+    } else {
+        # Fallback to internal drive if USB is missing
+        $internalLogVol = Get-Volume | Where-Object { $_.DriveType -eq 'Fixed' -and $_.DriveLetter -ne $null } | Select-Object -First 1
+        if ($null -ne $internalLogVol) {
+            $internalPath = "$($internalLogVol.DriveLetter):\Logs"
+            if (-not (Test-Path $internalPath)) { 
+                New-Item -ItemType Directory -Path $internalPath -Force | Out-Null 
+            }
+            Copy-Item $ramLogPath -Destination "$internalPath\audit.csv" -Force -ErrorAction SilentlyContinue
+        }
     }
 }
