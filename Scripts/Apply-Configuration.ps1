@@ -148,8 +148,8 @@ function Set-LenovoFirmwareConfig {
             Write-Host "  -> Skipping Supervisor Password (Already Disabled)..."
         }
 
-        # Final save
-        Invoke-CimMethod -InputObject $saveWmi -MethodName SaveBiosSettings -Arguments @{Parameter=",ascii,us"} -ErrorAction SilentlyContinue | Out-Null
+        # Final save (Must use the old password to authorize the deletion!)
+        Invoke-CimMethod -InputObject $saveWmi -MethodName SaveBiosSettings -Arguments @{Parameter=$saveParam} -ErrorAction SilentlyContinue | Out-Null
         
         Write-Host "[ OK ] Configuration and password deletion routine completed." -ForegroundColor Green
     } catch {
