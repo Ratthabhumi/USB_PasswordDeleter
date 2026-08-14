@@ -42,12 +42,19 @@ function Get-SecureCredential {
 }
 
 function Set-LenovoFirmwareConfig {
+    param($Config)
     $svpPassword = Get-SecureCredential -CredentialName "supervisor"
     $popHddPassword = Get-SecureCredential -CredentialName "pop_hdd"
 
     if ([string]::IsNullOrEmpty($svpPassword) -and [string]::IsNullOrEmpty($popHddPassword)) {
         Write-Error "Cannot proceed: No valid credentials found in Config folder."
         return $false
+    }
+
+    # Only use Supervisor Password if it is actually enabled in BIOS
+    if ($null -ne $Config -and $Config.FirmwareAuth -notmatch "^(Enable|Enabled|1)$") {
+        Write-Host "  [INFO] Supervisor Password is not active on this machine. Proceeding without it."
+        $svpPassword = ""
     }
 
     Write-Host "Applying authorized company BIOS configurations..." -ForegroundColor Cyan
@@ -132,11 +139,13 @@ function Set-LenovoFirmwareConfig {
         # ----------------------------------------------------
         # 6. Clear Supervisor Password (PAP) as the FINAL step
         # ----------------------------------------------------
-        Write-Host "  -> Clearing Supervisor / Master BIOS Password..."
         if (-not [string]::IsNullOrEmpty($svpPassword) -and $null -ne $setPwdWmi) {
+            Write-Host "  -> Clearing Supervisor / Master BIOS Password..."
             $cmdPap = "pap,$svpPassword,,ascii,us"
             $resPap = Invoke-CimMethod -InputObject $setPwdWmi -MethodName SetBiosPassword -Arguments @{Parameter=$cmdPap}
             Write-Host "     Result (SetBiosPassword pap): $($resPap.return)"
+        } else {
+            Write-Host "  -> Skipping Supervisor Password (Already Disabled)..."
         }
 
         # Final save

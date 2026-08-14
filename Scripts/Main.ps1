@@ -67,7 +67,7 @@ if ($config.SecureBoot -in @("Disable", "Disabled", "0") -and $config.BootOrder 
     Write-Host "System is already compliant (No active passwords, SecureBoot disabled, BootOrder internal)." -ForegroundColor Green
     Write-AuditLog -Serial $hw.Serial -MachineType $hw.MachineType -Model $hw.Model -BIOSVersion $hw.BIOSVersion -Storage $hw.Storage -Result "ALREADY_COMPLIANT" -ErrorDetail ""
 } else {
-    $applyResult = Set-LenovoFirmwareConfig
+    $applyResult = Set-LenovoFirmwareConfig -Config $config
     
     if (-not $applyResult) {
         Write-Host "Configuration failed. See errors above." -ForegroundColor Red
