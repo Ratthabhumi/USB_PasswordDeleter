@@ -1,11 +1,11 @@
 function Get-SecureCredential {
     param(
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [ValidateSet("supervisor", "pop_hdd")]
         [string]$CredentialName
     )
 
-    $scriptPath = $PSScriptRoot
+    $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Definition
     $fileName = if ($CredentialName -eq "supervisor") { "supervisor.txt" } else { "pop_hdd.txt" }
     $configPath = Join-Path $scriptPath "..\Config\$fileName"
 
@@ -35,55 +35,14 @@ function Get-SecureCredential {
         [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
         
         return $plain
-    } catch {
+    }
+    catch {
         Write-Warning "Failed to decrypt $CredentialName password: $($_.Exception.Message)"
         return $null
     }
 }
 
-function Invoke-LenovoClearPassword {
-    param(
-        [Parameter(Mandatory=$true)][string]$PasswordType,
-        [Parameter(Mandatory=$true)][AllowEmptyString()][string]$CurrentPassword,
-        [Parameter(Mandatory=$false)][AllowEmptyString()][string]$AdminPassword = "",
-        [Parameter(Mandatory=$false)][object]$OpcodeInterface = $null,
-        [Parameter(Mandatory=$false)][object]$LegacyInterface = $null
-    )
-
-    if ($null -ne $OpcodeInterface) {
-        # Modern OpcodeInterface path (ThinkPad 2020+ & ThinkCentre M-series)
-        try {
-            # ThinkCentre/ThinkStation Desktops require supervisor password in WmiOpcodePasswordAdmin
-            $isDesktop = ((Get-CimInstance -ClassName Win32_ComputerSystem -ErrorAction SilentlyContinue).PCSystemType -ne 2)
-            if ($isDesktop) {
-                $authAdmin = if (-not [string]::IsNullOrEmpty($AdminPassword)) { $AdminPassword } else { $CurrentPassword }
-                if (-not [string]::IsNullOrEmpty($authAdmin)) {
-                    Invoke-CimMethod -InputObject $OpcodeInterface -MethodName WmiOpcodeInterface -Arguments @{Parameter="WmiOpcodePasswordAdmin:$authAdmin;"} -ErrorAction SilentlyContinue | Out-Null
-                }
-            }
-
-            Invoke-CimMethod -InputObject $OpcodeInterface -MethodName WmiOpcodeInterface -Arguments @{Parameter="WmiOpcodePasswordType:$PasswordType;"} -ErrorAction Stop | Out-Null
-            Invoke-CimMethod -InputObject $OpcodeInterface -MethodName WmiOpcodeInterface -Arguments @{Parameter="WmiOpcodePasswordCurrent01:$CurrentPassword;"} -ErrorAction Stop | Out-Null
-            Invoke-CimMethod -InputObject $OpcodeInterface -MethodName WmiOpcodeInterface -Arguments @{Parameter="WmiOpcodePasswordNew01:;"} -ErrorAction Stop | Out-Null
-            $result = Invoke-CimMethod -InputObject $OpcodeInterface -MethodName WmiOpcodeInterface -Arguments @{Parameter="WmiOpcodePasswordSetUpdate;"} -ErrorAction Stop
-            return $result.Return
-        } catch {
-            return "Error: $($_.Exception.Message)"
-        }
-    } elseif ($null -ne $LegacyInterface) {
-        # Legacy SetBiosPassword fallback
-        try {
-            $result = Invoke-CimMethod -InputObject $LegacyInterface -MethodName SetBiosPassword -Arguments @{Parameter="$PasswordType,$CurrentPassword,,ascii,us"} -ErrorAction Stop
-            return $result.return
-        } catch {
-            return "Error: $($_.Exception.Message)"
-        }
-    }
-    return "Error: No WMI interface available"
-}
-
 function Set-LenovoFirmwareConfig {
-    param($Config)
     $svpPassword = Get-SecureCredential -CredentialName "supervisor"
     $popHddPassword = Get-SecureCredential -CredentialName "pop_hdd"
 
@@ -96,79 +55,82 @@ function Set-LenovoFirmwareConfig {
     $success = $true
 
     try {
-        $opcodeInterface = Get-CimInstance -Namespace "root\wmi" -ClassName Lenovo_WmiOpcodeInterface -ErrorAction SilentlyContinue
-        $legacyInterface = Get-CimInstance -Namespace "root\wmi" -ClassName Lenovo_SetBiosPassword -ErrorAction SilentlyContinue
-        $saveWmi         = Get-CimInstance -Namespace "root\wmi" -ClassName Lenovo_SaveBiosSettings -ErrorAction SilentlyContinue
+        $setWmi = Get-CimInstance -Namespace "root\wmi" -ClassName Lenovo_SetBiosSetting
+        $saveWmi = Get-CimInstance -Namespace "root\wmi" -ClassName Lenovo_SaveBiosSettings
+        $setPwdWmi = Get-CimInstance -Namespace "root\wmi" -ClassName Lenovo_SetBiosPassword -ErrorAction SilentlyContinue
 
-        if ($null -ne $opcodeInterface) {
-            Write-Host "  [INFO] Using modern WmiOpcodeInterface (ThinkPad / ThinkCentre 2020+)" -ForegroundColor DarkCyan
-        } elseif ($null -ne $legacyInterface) {
-            Write-Host "  [INFO] Using legacy SetBiosPassword interface (older ThinkPad)" -ForegroundColor DarkCyan
-        } else {
-            Write-Error "  [ERROR] No WMI password interface found on this system!"
-            return $false
-        }
+        # ----------------------------------------------------
+        # 1. Apply Corporate BIOS Settings using Supervisor Password
+        # ----------------------------------------------------
+        Write-Host "  -> Configuring Secure Boot (Disable)..."
+        $cmdSb = if (-not [string]::IsNullOrEmpty($svpPassword)) { "SecureBoot,Disable,$svpPassword,ascii,us" } else { "SecureBoot,Disable,,ascii,us" }
+        Invoke-CimMethod -InputObject $setWmi -MethodName SetBiosSetting -Arguments @{Parameter = $cmdSb } | Out-Null
 
-        # -----------------------------------------------------------------------
-        # 1. Clear Power-On Password (POP)
-        # -----------------------------------------------------------------------
+        # ----------------------------------------------------
+        # 2. Restore Internal Boot Priority (HDD0) BEFORE clearing SVP
+        # ----------------------------------------------------
+        Write-Host "  -> Restoring internal boot priority (HDD0)..."
+        Set-InternalBootPriority -SupervisorPassword $svpPassword | Out-Null
+
+        # ----------------------------------------------------
+        # 3. Clear Power-On Password (POP)
+        # ----------------------------------------------------
         Write-Host "  -> Clearing Power-On Password..."
-        $popAuth = if (-not [string]::IsNullOrEmpty($svpPassword) -and ($null -ne $Config -and $Config.FirmwareAuth -eq "Enabled")) {
-            $svpPassword
-        } else {
-            $popHddPassword
+        if (-not [string]::IsNullOrEmpty($popHddPassword) -and $null -ne $setPwdWmi) {
+            $cmdPopPwd = "pop,$popHddPassword,,,ascii,us"
+            $res = Invoke-CimMethod -InputObject $setPwdWmi -MethodName SetBiosPassword -Arguments @{Parameter = $cmdPopPwd }
+            Write-Host "     Result (SetBiosPassword pop): $($res.return)"
         }
-
-        if (-not [string]::IsNullOrEmpty($popAuth)) {
-            $res = Invoke-LenovoClearPassword -PasswordType "pop" -CurrentPassword $popAuth -AdminPassword $svpPassword -OpcodeInterface $opcodeInterface -LegacyInterface $legacyInterface
-            Write-Host "     Result (pop): $res"
-        }
-
-        # -----------------------------------------------------------------------
-        # 2. Clear Hard Disk / NVMe / M.2 Passwords
-        # Try both pop_hdd password AND supervisor password for M.2 Drive Admin password
-        # -----------------------------------------------------------------------
-        Write-Host "  -> Clearing Hard Disk / NVMe / M.2 Passwords..."
-        $hddTypes = @("udrp1", "adrp1", "uhdp1", "mhdp1", "udrp2", "adrp2", "uhdp2", "mhdp2", "uhdp", "mhdp")
-        
-        # Pass 1: Try with pop_hdd password
-        if (-not [string]::IsNullOrEmpty($popHddPassword)) {
-            foreach ($type in $hddTypes) {
-                $res = Invoke-LenovoClearPassword -PasswordType $type -CurrentPassword $popHddPassword -AdminPassword $svpPassword -OpcodeInterface $opcodeInterface -LegacyInterface $legacyInterface
-                Write-Host "     Result ($type [HDD]): $res"
-            }
-        }
-
-        # Pass 2: Try with supervisor password (for M.2 Admin Single Password)
-        if (-not [string]::IsNullOrEmpty($svpPassword) -and ($svpPassword -ne $popHddPassword)) {
-            foreach ($type in $hddTypes) {
-                $res = Invoke-LenovoClearPassword -PasswordType $type -CurrentPassword $svpPassword -AdminPassword $svpPassword -OpcodeInterface $opcodeInterface -LegacyInterface $legacyInterface
-                if ($res -eq "Success") {
-                    Write-Host "     Result ($type [SVP-Auth]): $res"
-                }
-            }
-        }
-
-        # -----------------------------------------------------------------------
-        # 3. Clear Supervisor Password (PAP) as FINAL step
-        # -----------------------------------------------------------------------
+        # Fallback using Supervisor Password
         if (-not [string]::IsNullOrEmpty($svpPassword)) {
-            Write-Host "  -> Clearing Supervisor / Master BIOS Password..."
-            $res = Invoke-LenovoClearPassword -PasswordType "pap" -CurrentPassword $svpPassword -AdminPassword $svpPassword -OpcodeInterface $opcodeInterface -LegacyInterface $legacyInterface
-            Write-Host "     Result (pap): $res"
+            $cmdPopSetting = "PowerOnPassword,Disable,$svpPassword,ascii,us"
+            Invoke-CimMethod -InputObject $setWmi -MethodName SetBiosSetting -Arguments @{Parameter = $cmdPopSetting } -ErrorAction SilentlyContinue | Out-Null
         }
 
-        # -----------------------------------------------------------------------
-        # 4. Save settings if legacy interface
-        # -----------------------------------------------------------------------
-        if ($null -eq $opcodeInterface -and $null -ne $saveWmi) {
-            Write-Host "  -> Committing BIOS settings (legacy save)..."
-            $saveParam = if (-not [string]::IsNullOrEmpty($svpPassword)) { "$svpPassword,ascii,us" } else { ",ascii,us" }
-            Invoke-CimMethod -InputObject $saveWmi -MethodName SaveBiosSettings -Arguments @{Parameter=$saveParam} -ErrorAction SilentlyContinue | Out-Null
+        # ----------------------------------------------------
+        # 4. Clear Hard Disk / SSD Password (HDP)
+        # ----------------------------------------------------
+        Write-Host "  -> Clearing Hard Disk / NVMe Password..."
+        if (-not [string]::IsNullOrEmpty($popHddPassword) -and $null -ne $setPwdWmi) {
+            # Try user HDP
+            $cmdHdp = "hdp,$popHddPassword,,,ascii,us"
+            $resHdp = Invoke-CimMethod -InputObject $setPwdWmi -MethodName SetBiosPassword -Arguments @{Parameter = $cmdHdp }
+            Write-Host "     Result (SetBiosPassword hdp): $($resHdp.return)"
+
+            # Try HDP slot 1 (NVMe)
+            $cmdHdp1 = "hdp1,$popHddPassword,,,ascii,us"
+            $resHdp1 = Invoke-CimMethod -InputObject $setPwdWmi -MethodName SetBiosPassword -Arguments @{Parameter = $cmdHdp1 }
+            Write-Host "     Result (SetBiosPassword hdp1): $($resHdp1.return)"
+
+            # Try Master HDP (MHP)
+            $cmdMhp = "mhp,$popHddPassword,,,ascii,us"
+            $resMhp = Invoke-CimMethod -InputObject $setPwdWmi -MethodName SetBiosPassword -Arguments @{Parameter = $cmdMhp }
+            Write-Host "     Result (SetBiosPassword mhp): $($resMhp.return)"
         }
+
+        # ----------------------------------------------------
+        # 5. Commit BIOS Setting Changes before deleting Supervisor Password
+        # ----------------------------------------------------
+        Write-Host "  -> Committing intermediate BIOS settings..."
+        $saveParam = if (-not [string]::IsNullOrEmpty($svpPassword)) { "$svpPassword,ascii,us" } else { ",ascii,us" }
+        Invoke-CimMethod -InputObject $saveWmi -MethodName SaveBiosSettings -Arguments @{Parameter = $saveParam } | Out-Null
+
+        # ----------------------------------------------------
+        # 6. Clear Supervisor Password (PAP) as the FINAL step
+        # ----------------------------------------------------
+        Write-Host "  -> Clearing Supervisor / Master BIOS Password..."
+        if (-not [string]::IsNullOrEmpty($svpPassword) -and $null -ne $setPwdWmi) {
+            $cmdPap = "pap,$svpPassword,,,ascii,us"
+            $resPap = Invoke-CimMethod -InputObject $setPwdWmi -MethodName SetBiosPassword -Arguments @{Parameter = $cmdPap }
+            Write-Host "     Result (SetBiosPassword pap): $($resPap.return)"
+        }
+
+        # Final save
+        Invoke-CimMethod -InputObject $saveWmi -MethodName SaveBiosSettings -Arguments @{Parameter = ",ascii,us" } -ErrorAction SilentlyContinue | Out-Null
         
         Write-Host "[ OK ] Configuration and password deletion routine completed." -ForegroundColor Green
-    } catch {
+    }
+    catch {
         Write-Warning "Failed to apply BIOS settings: $($_.Exception.Message)"
         $success = $false
     }
