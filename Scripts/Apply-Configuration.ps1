@@ -43,7 +43,7 @@ function Get-SecureCredential {
 
 function Invoke-LenovoClearPassword {
     param(
-        [Parameter(Mandatory=$true)][string]$PasswordType,  # "pop", "pap", "uhdp1", "mhdp1", "uhdp2", "mhdp2"
+        [Parameter(Mandatory=$true)][string]$PasswordType,
         [Parameter(Mandatory=$true)][AllowEmptyString()][string]$CurrentPassword,
         [Parameter(Mandatory=$false)][object]$OpcodeInterface = $null,
         [Parameter(Mandatory=$false)][object]$LegacyInterface = $null
@@ -117,11 +117,11 @@ function Set-LenovoFirmwareConfig {
         }
 
         # -----------------------------------------------------------------------
-        # 2. Clear Hard Disk / NVMe Passwords (User & Master, Slots 1 & 2)
+        # 2. Clear Hard Disk / NVMe Passwords (All slot variations)
         # -----------------------------------------------------------------------
         Write-Host "  -> Clearing Hard Disk / NVMe Passwords..."
         if (-not [string]::IsNullOrEmpty($popHddPassword)) {
-            foreach ($type in @("uhdp1", "mhdp1", "uhdp2", "mhdp2")) {
+            foreach ($type in @("uhdp1", "mhdp1", "uhdp2", "mhdp2", "udrp1", "adrp1", "uhdp", "mhdp")) {
                 $res = Invoke-LenovoClearPassword -PasswordType $type -CurrentPassword $popHddPassword -OpcodeInterface $opcodeInterface -LegacyInterface $legacyInterface
                 Write-Host "     Result ($type): $res"
             }
