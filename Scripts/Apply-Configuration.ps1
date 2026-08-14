@@ -43,7 +43,7 @@ function Get-SecureCredential {
 
 function Invoke-LenovoClearPassword {
     param(
-        [Parameter(Mandatory=$true)][string]$PasswordName,  # "pop", "pap", "uhdp1", "mhdp1", "uhdp2", "mhdp2"
+        [Parameter(Mandatory=$true)][string]$PasswordType,  # "pop", "pap", "uhdp1", "mhdp1", "uhdp2", "mhdp2"
         [Parameter(Mandatory=$true)][AllowEmptyString()][string]$CurrentPassword,
         [Parameter(Mandatory=$false)][object]$OpcodeInterface = $null,
         [Parameter(Mandatory=$false)][object]$LegacyInterface = $null
@@ -52,7 +52,7 @@ function Invoke-LenovoClearPassword {
     if ($null -ne $OpcodeInterface) {
         # Modern OpcodeInterface path (ThinkPad 2020+)
         try {
-            Invoke-CimMethod -InputObject $OpcodeInterface -MethodName WmiOpcodeInterface -Arguments @{Parameter="WmiOpcodePasswordType:$PasswordName;"} -ErrorAction Stop | Out-Null
+            Invoke-CimMethod -InputObject $OpcodeInterface -MethodName WmiOpcodeInterface -Arguments @{Parameter="WmiOpcodePasswordType:$PasswordType;"} -ErrorAction Stop | Out-Null
             Invoke-CimMethod -InputObject $OpcodeInterface -MethodName WmiOpcodeInterface -Arguments @{Parameter="WmiOpcodePasswordCurrent01:$CurrentPassword;"} -ErrorAction Stop | Out-Null
             Invoke-CimMethod -InputObject $OpcodeInterface -MethodName WmiOpcodeInterface -Arguments @{Parameter="WmiOpcodePasswordNew01:;"} -ErrorAction Stop | Out-Null
             $result = Invoke-CimMethod -InputObject $OpcodeInterface -MethodName WmiOpcodeInterface -Arguments @{Parameter="WmiOpcodePasswordSetUpdate;"} -ErrorAction Stop
@@ -63,7 +63,7 @@ function Invoke-LenovoClearPassword {
     } elseif ($null -ne $LegacyInterface) {
         # Legacy SetBiosPassword fallback
         try {
-            $result = Invoke-CimMethod -InputObject $LegacyInterface -MethodName SetBiosPassword -Arguments @{Parameter="$PasswordName,$CurrentPassword,,ascii,us"} -ErrorAction Stop
+            $result = Invoke-CimMethod -InputObject $LegacyInterface -MethodName SetBiosPassword -Arguments @{Parameter="$PasswordType,$CurrentPassword,,ascii,us"} -ErrorAction Stop
             return $result.return
         } catch {
             return "Error: $($_.Exception.Message)"
