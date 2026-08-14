@@ -4,10 +4,15 @@ function Set-InternalBootPriority {
         [string]$SupervisorPassword = ""
     )
 
-    $password = if (-not [string]::IsNullOrEmpty($SupervisorPassword)) {
-        $SupervisorPassword
-    } else {
-        Get-SecureCredential -CredentialName "supervisor"
+    $config = Get-LenovoFirmwareConfig
+    
+    $password = ""
+    if ($null -ne $config -and $config.FirmwareAuth -match "^(Enable|Enabled|1)$") {
+        $password = if (-not [string]::IsNullOrEmpty($SupervisorPassword)) {
+            $SupervisorPassword
+        } else {
+            Get-SecureCredential -CredentialName "supervisor"
+        }
     }
 
     Write-Host "Restoring normal internal-drive boot priority (HDD0)..." -ForegroundColor Cyan
