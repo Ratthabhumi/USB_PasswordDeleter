@@ -172,8 +172,8 @@ timeout /t 2 /nobreak >nul
 
 :: Bypass buggy MakeWinPEMedia diskpart formatting and perform direct copy and bootsect
 echo [INFO] Copying WinPE files directly to %TARGET_DRIVE%...
-xcopy /s /e /y /h /i "%PE_DIR%\media\*" "%TARGET_DRIVE%\" >nul
-if %errorLevel% NEQ 0 (
+robocopy "%PE_DIR%\media" "%TARGET_DRIVE%\\" /E /Z /R:0 /W:0
+if %errorLevel% GEQ 8 (
     echo.
     echo [ERROR] Failed to copy WinPE files to %TARGET_DRIVE%.
     pause
