@@ -69,9 +69,10 @@ if (-not $hasPasswords) {
 } else {
     $applyResult = Set-LenovoFirmwareConfig -Config $config
     
-    if (-not $applyResult) {
+    if (-not $applyResult.Success) {
         Write-Host "Configuration failed. See errors above." -ForegroundColor Red
-        Write-AuditLog -Serial $hw.Serial -MachineType $hw.MachineType -Model $hw.Model -BIOSVersion $hw.BIOSVersion -Storage $hw.Storage -Result "MANUAL_REQUIRED" -ErrorDetail "Set-LenovoFirmwareConfig Failed"
+        $errorMsg = if ([string]::IsNullOrEmpty($applyResult.ErrorMessage)) { "Set-LenovoFirmwareConfig Failed" } else { $applyResult.ErrorMessage }
+        Write-AuditLog -Serial $hw.Serial -MachineType $hw.MachineType -Model $hw.Model -BIOSVersion $hw.BIOSVersion -Storage $hw.Storage -Result "MANUAL_REQUIRED" -ErrorDetail $errorMsg
         exit
     }
 }
