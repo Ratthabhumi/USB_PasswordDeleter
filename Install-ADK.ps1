@@ -19,15 +19,15 @@ try {
     Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2120254" -OutFile $adkSetup
     
     Write-Host "[2/4] Installing Windows ADK (This may take 5-10 minutes)..." -ForegroundColor Yellow
-    # ติดตั้งแบบเงียบ (Quiet) โดยลงเฉพาะ Deployment Tools ที่จำเป็น
-    Start-Process -FilePath $adkSetup -ArgumentList "/quiet /norestart /features OptionId.DeploymentTools" -Wait
+    # ติดตั้งแบบแสดงหลอดความคืบหน้า (Passive)
+    Start-Process -FilePath $adkSetup -ArgumentList "/passive /norestart /features OptionId.DeploymentTools" -Wait
     
     Write-Host "[3/4] Downloading Windows PE Add-on..."
     $peSetup = "$env:TEMP\adkwinpesetup.exe"
     Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2120253" -OutFile $peSetup
     
     Write-Host "[4/4] Installing Windows PE Add-on (This may take 5-10 minutes)..." -ForegroundColor Yellow
-    Start-Process -FilePath $peSetup -ArgumentList "/quiet /norestart /features OptionId.WindowsPreinstallationEnvironment" -Wait
+    Start-Process -FilePath $peSetup -ArgumentList "/passive /norestart /features OptionId.WindowsPreinstallationEnvironment" -Wait
     
     Write-Host ""
     Write-Host "================================================" -ForegroundColor Green
