@@ -11,12 +11,6 @@ function Verify-LenovoFirmwareConfig {
         return @{ Result = "FAILED"; Reason = "Could not read WMI after save" }
     }
 
-    # 1. Verify Secure Boot
-    if ($config.SecureBoot -notin @("Disable", "Disabled", "0")) {
-        $isCompliant = $false
-        $errors += "SecureBoot is '$($config.SecureBoot)' instead of Disable"
-    }
-
     # 2. Verify Power On Password is cleared
     if ($config.PowerOnPassword -match "^(Enable|Enabled|1)$") {
         $isCompliant = $false
@@ -35,11 +29,6 @@ function Verify-LenovoFirmwareConfig {
         $errors += "SupervisorPassword is still active: $($config.FirmwareAuth)"
     }
 
-    # 5. Verify Boot Order starts with internal drive (HDD0 / NVMe)
-    if ($config.BootOrder -notmatch "^((USBHDD|USBCD|USBFDD):)*(HDD0|NVMe0)") {
-        $isCompliant = $false
-        $errors += "BootOrder does not prioritize internal drive (Current: $($config.BootOrder))"
-    }
 
     if ($isCompliant) {
         Write-Host "[ OK ] All configurations verified. Passwords removed." -ForegroundColor Green

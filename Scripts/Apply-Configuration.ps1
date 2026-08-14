@@ -66,17 +66,11 @@ function Set-LenovoFirmwareConfig {
         $setPwdWmi = Get-CimInstance -Namespace "root\wmi" -ClassName Lenovo_SetBiosPassword -ErrorAction SilentlyContinue
 
         # ----------------------------------------------------
-        # 1. Apply Corporate BIOS Settings using Supervisor Password
+        # 1. (REMOVED) SecureBoot and BootOrder changes are intentionally skipped.
+        # Lenovo WMI strictly forbids mixing BIOS Settings (SecureBoot/BootOrder) 
+        # with Password deletions (HDP/PAP) in the same boot cycle, which causes 
+        # the 0191 Invalid remote change error. We only focus on passwords.
         # ----------------------------------------------------
-        Write-Host "  -> Configuring Secure Boot (Disable)..."
-        $cmdSb = if (-not [string]::IsNullOrEmpty($svpPassword)) { "SecureBoot,Disable,$svpPassword,ascii,us" } else { "SecureBoot,Disable,,ascii,us" }
-        Invoke-CimMethod -InputObject $setWmi -MethodName SetBiosSetting -Arguments @{Parameter=$cmdSb} | Out-Null
-
-        # ----------------------------------------------------
-        # 2. Restore Internal Boot Priority (HDD0) BEFORE clearing SVP
-        # ----------------------------------------------------
-        Write-Host "  -> Restoring internal boot priority (HDD0)..."
-        Set-InternalBootPriority -SupervisorPassword $svpPassword | Out-Null
 
         # ----------------------------------------------------
         # 3. Clear Power-On Password (POP)
