@@ -81,11 +81,7 @@ function Set-LenovoFirmwareConfig {
             $res = Invoke-CimMethod -InputObject $setPwdWmi -MethodName SetBiosPassword -Arguments @{Parameter=$cmdPopPwd}
             Write-Host "     Result (SetBiosPassword pop): $($res.return)"
         }
-        # Fallback using Supervisor Password
-        if (-not [string]::IsNullOrEmpty($svpPassword)) {
-            $cmdPopSetting = "PowerOnPassword,Disable,$svpPassword,ascii,us"
-            Invoke-CimMethod -InputObject $setWmi -MethodName SetBiosSetting -Arguments @{Parameter=$cmdPopSetting} -ErrorAction SilentlyContinue | Out-Null
-        }
+
 
         # ----------------------------------------------------
         # 4. Clear Hard Disk / SSD Password (HDP)
