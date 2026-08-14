@@ -50,8 +50,14 @@ function Invoke-LenovoClearPassword {
     )
 
     if ($null -ne $OpcodeInterface) {
-        # Modern OpcodeInterface path (ThinkPad 2020+)
+        # Modern OpcodeInterface path (ThinkPad 2020+ & ThinkCentre M-series)
         try {
+            # ThinkCentre/ThinkStation Desktops require WmiOpcodePasswordAdmin before password changes
+            $isDesktop = ((Get-CimInstance -ClassName Win32_ComputerSystem -ErrorAction SilentlyContinue).PCSystemType -ne 2)
+            if ($isDesktop -and -not [string]::IsNullOrEmpty($CurrentPassword)) {
+                Invoke-CimMethod -InputObject $OpcodeInterface -MethodName WmiOpcodeInterface -Arguments @{Parameter="WmiOpcodePasswordAdmin:$CurrentPassword;"} -ErrorAction SilentlyContinue | Out-Null
+            }
+
             Invoke-CimMethod -InputObject $OpcodeInterface -MethodName WmiOpcodeInterface -Arguments @{Parameter="WmiOpcodePasswordType:$PasswordType;"} -ErrorAction Stop | Out-Null
             Invoke-CimMethod -InputObject $OpcodeInterface -MethodName WmiOpcodeInterface -Arguments @{Parameter="WmiOpcodePasswordCurrent01:$CurrentPassword;"} -ErrorAction Stop | Out-Null
             Invoke-CimMethod -InputObject $OpcodeInterface -MethodName WmiOpcodeInterface -Arguments @{Parameter="WmiOpcodePasswordNew01:;"} -ErrorAction Stop | Out-Null

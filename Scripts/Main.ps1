@@ -23,14 +23,14 @@ Write-Host "Model  : $($hw.Model)"
 Write-Host "Type   : $($hw.MachineType)"
 Write-Host "Serial : $($hw.Serial)"
 
-$supportedModels = @("20X3", "20X4", "20U7", "20U8", "20WK", "20WL", "20XH", "20XJ")
-if ($hw.MachineType -notin $supportedModels) {
+# Allow all genuine Lenovo devices (ThinkPad, ThinkCentre M90q/M70q/M80q, ThinkStation)
+if ($hw.Manufacturer -notmatch "LENOVO") {
     Write-Host ""
     Write-Host "================================================" -ForegroundColor Red
     Write-Host "            MANUAL REQUIRED" -ForegroundColor Red
     Write-Host "================================================" -ForegroundColor Red
-    Write-Host "Reason: Unsupported Machine Type: $($hw.MachineType)"
-    Write-AuditLog -Serial $hw.Serial -MachineType $hw.MachineType -Model $hw.Model -BIOSVersion $hw.BIOSVersion -Storage $hw.Storage -Result "MANUAL_REQUIRED" -ErrorDetail "Unsupported Machine Type"
+    Write-Host "Reason: Unsupported Manufacturer (Not Lenovo): $($hw.Manufacturer)"
+    Write-AuditLog -Serial $hw.Serial -MachineType $hw.MachineType -Model $hw.Model -BIOSVersion $hw.BIOSVersion -Storage $hw.Storage -Result "MANUAL_REQUIRED" -ErrorDetail "Non-Lenovo Hardware"
     exit
 }
 
