@@ -1,50 +1,65 @@
-# Lenovo WMI & WinPE Cheat Sheet
+# Lenovo WMI & WinPE Automation Cheat Sheet
 
 ## 1. Credential Management
-Generate AES-encrypted password files (`Config\supervisor.txt` & `Config\pop_hdd.txt`):
+Generate AES-256 encrypted password files (`Config\supervisor.txt` & `Config\pop_hdd.txt`):
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\Lenovo\Tools\Set-Credentials.ps1
 ```
 
-## 2. Compile WinPE Boot Media (Run as Admin)
-```cmd
-:: 1. Copy base WinPE
-copype amd64 C:\WinPE_amd64
+## 2. Automated USB Builder (Run as Admin)
+Simply right-click `setup.bat` and select **"Run as administrator"**.
 
-:: 2. Mount Image
-Dism /Mount-Image /ImageFile:"C:\WinPE_amd64\media\sources\boot.wim" /index:1 /MountDir:"C:\WinPE_amd64\mount"
+To duplicate the master WinPE USB to another flash drive:
+Right-click `Duplicate-USB.bat` and select **"Run as administrator"**.
 
-:: 3. Inject Required Packages (Must inject both neutral and en-us versions)
-Dism /Add-Package /Image:"C:\WinPE_amd64\mount" /PackagePath:"C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Windows Preinstallation Environment\amd64\WinPE_OCs\WinPE-WMI.cab"
-Dism /Add-Package /Image:"C:\WinPE_amd64\mount" /PackagePath:"C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Windows Preinstallation Environment\amd64\WinPE_OCs\WinPE-NetFX.cab"
-Dism /Add-Package /Image:"C:\WinPE_amd64\mount" /PackagePath:"C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Windows Preinstallation Environment\amd64\WinPE_OCs\WinPE-Scripting.cab"
-Dism /Add-Package /Image:"C:\WinPE_amd64\mount" /PackagePath:"C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Windows Preinstallation Environment\amd64\WinPE_OCs\WinPE-PowerShell.cab"
+## 3. Lenovo WMI Architecture Reference
 
-:: 4. Inject Project Files
-xcopy /s /e "%~dp0*" "C:\WinPE_amd64\mount\USB_PasswordDeleter\"
+### Modern Opcode Interface (ThinkPad 2020+ & ThinkCentre Desktops)
+- WMI Namespace: `root\wmi`
+- Primary Class: `Lenovo_WmiOpcodeInterface`
+- Sequence to clear a password:
+  ```powershell
+  # 1. For ThinkCentre / ThinkStation desktops only:
+  Invoke-CimMethod -ClassName Lenovo_WmiOpcodeInterface -MethodName WmiOpcodeInterface -Arguments @{Parameter="WmiOpcodePasswordAdmin:<SVP>;"}
 
-:: 5. Set Startup Script
-echo powershell.exe -ExecutionPolicy Bypass -File X:\USB_PasswordDeleter\Scripts\Main.ps1 >> C:\WinPE_amd64\mount\Windows\System32\startnet.cmd
+  # 2. Set Password Type:
+  Invoke-CimMethod -ClassName Lenovo_WmiOpcodeInterface -MethodName WmiOpcodeInterface -Arguments @{Parameter="WmiOpcodePasswordType:<type>;"}
 
-:: 6. Unmount and Save
-Dism /Unmount-Image /MountDir:"C:\WinPE_amd64\mount" /commit
+  # 3. Supply Current Password:
+  Invoke-CimMethod -ClassName Lenovo_WmiOpcodeInterface -MethodName WmiOpcodeInterface -Arguments @{Parameter="WmiOpcodePasswordCurrent01:<current_password>;"}
 
-:: 7. Format and Create USB (Bypass MakeWinPEMedia bug)
-xcopy /s /e /y /h /i "C:\WinPE_amd64\media\*" "G:\"
-"C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\BCDBoot\bootsect.exe" /nt60 G: /force /mbr
-```
+  # 4. Supply Empty New Password (to clear):
+  Invoke-CimMethod -ClassName Lenovo_WmiOpcodeInterface -MethodName WmiOpcodeInterface -Arguments @{Parameter="WmiOpcodePasswordNew01:;"}
 
-> [!TIP]
-> **Corrupted USB Drive?** If formatting fails or DiskPart gets locked, use the included `Clean-USB.bat` script (Run as Admin) to completely wipe and restore the flash drive's partition table.
+  # 5. Commit to NVRAM:
+  Invoke-CimMethod -ClassName Lenovo_WmiOpcodeInterface -MethodName WmiOpcodeInterface -Arguments @{Parameter="WmiOpcodePasswordSetUpdate;"}
+  ```
 
-## 3. Useful Lenovo WMI Queries
-Read all current settings:
+### Password Type Identifiers (`WmiOpcodePasswordType`)
+- `pap`: Supervisor / Master BIOS Password
+- `pop`: Power-On Password
+- `udrp1` / `adrp1`: M.2 / NVMe Drive 1 User & Admin Password (ThinkCentre & ThinkPad)
+- `uhdp1` / `mhdp1`: Primary Storage User & Master Password
+- `uhdp2` / `mhdp2`: Secondary Storage User & Master Password
+
+### Checking Password States (`Lenovo_BiosPasswordSettings`)
 ```powershell
-Get-CimInstance -Namespace root\wmi -ClassName Lenovo_BiosSetting | Select-Object CurrentSetting
+(Get-CimInstance -Namespace root\wmi -ClassName Lenovo_BiosPasswordSettings).PasswordState
 ```
+**Bitmask Reference:**
+- `0`: No passwords set
+- `1`: Power-On Password (POP) only
+- `2`: Supervisor Password (SVP) only
+- `3`: POP + SVP
+- `4`: Hard Disk / NVMe Password (HDP) only
+- `5`: POP + HDP
+- `6`: SVP + HDP
+- `7`: POP + SVP + HDP
+- `64`–`71`: Systems with System Management Password (SMP)
 
-Check Password States:
-```powershell
-Get-CimInstance -Namespace root\wmi -ClassName Lenovo_BiosPasswordSettings
-```
-*(PasswordState: 0=None, 1=POP, 2=Supervisor, 3=Both)*
+### Critical Firmware Constraints & Troubleshooting
+1. **Error 0191 (System Security - Invalid Remote Change):**
+   - Occurs when attempting to modify general BIOS Settings (e.g. SecureBoot, BootOrder) in the same power cycle as password deletions. Keep password deletion operations isolated.
+   - Occurs when an incorrect authorizing password is submitted.
+2. **Reboot Requirement:** Password deletions via OpcodeInterface are queued in NVRAM and finalized upon the **next system reboot**.
+3. **Corrupted USB Drive?** Run `Clean-USB.bat` as Administrator to wipe and restore partition structures.
