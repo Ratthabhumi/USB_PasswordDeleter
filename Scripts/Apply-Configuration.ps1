@@ -76,7 +76,7 @@ function Set-LenovoFirmwareConfig {
         # ----------------------------------------------------
         Write-Host "  -> Clearing Power-On Password..."
         if (-not [string]::IsNullOrEmpty($popHddPassword) -and $null -ne $setPwdWmi) {
-            $cmdPopPwd = "pop,$popHddPassword,,,ascii,us"
+            $cmdPopPwd = "pop,$popHddPassword,,ascii,us"
             $res = Invoke-CimMethod -InputObject $setPwdWmi -MethodName SetBiosPassword -Arguments @{Parameter=$cmdPopPwd}
             Write-Host "     Result (SetBiosPassword pop): $($res.return)"
         }
@@ -92,17 +92,17 @@ function Set-LenovoFirmwareConfig {
         Write-Host "  -> Clearing Hard Disk / NVMe Password..."
         if (-not [string]::IsNullOrEmpty($popHddPassword) -and $null -ne $setPwdWmi) {
             # Try user HDP
-            $cmdHdp = "hdp,$popHddPassword,,,ascii,us"
+            $cmdHdp = "hdp,$popHddPassword,,ascii,us"
             $resHdp = Invoke-CimMethod -InputObject $setPwdWmi -MethodName SetBiosPassword -Arguments @{Parameter=$cmdHdp}
             Write-Host "     Result (SetBiosPassword hdp): $($resHdp.return)"
 
             # Try HDP slot 1 (NVMe)
-            $cmdHdp1 = "hdp1,$popHddPassword,,,ascii,us"
+            $cmdHdp1 = "hdp1,$popHddPassword,,ascii,us"
             $resHdp1 = Invoke-CimMethod -InputObject $setPwdWmi -MethodName SetBiosPassword -Arguments @{Parameter=$cmdHdp1}
             Write-Host "     Result (SetBiosPassword hdp1): $($resHdp1.return)"
 
             # Try Master HDP (MHP)
-            $cmdMhp = "mhp,$popHddPassword,,,ascii,us"
+            $cmdMhp = "mhp,$popHddPassword,,ascii,us"
             $resMhp = Invoke-CimMethod -InputObject $setPwdWmi -MethodName SetBiosPassword -Arguments @{Parameter=$cmdMhp}
             Write-Host "     Result (SetBiosPassword mhp): $($resMhp.return)"
         }
@@ -119,7 +119,7 @@ function Set-LenovoFirmwareConfig {
         # ----------------------------------------------------
         Write-Host "  -> Clearing Supervisor / Master BIOS Password..."
         if (-not [string]::IsNullOrEmpty($svpPassword) -and $null -ne $setPwdWmi) {
-            $cmdPap = "pap,$svpPassword,,,ascii,us"
+            $cmdPap = "pap,$svpPassword,,ascii,us"
             $resPap = Invoke-CimMethod -InputObject $setPwdWmi -MethodName SetBiosPassword -Arguments @{Parameter=$cmdPap}
             Write-Host "     Result (SetBiosPassword pap): $($resPap.return)"
         }

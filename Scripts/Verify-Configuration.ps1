@@ -36,7 +36,7 @@ function Verify-LenovoFirmwareConfig {
     }
 
     # 5. Verify Boot Order starts with internal drive (HDD0 / NVMe)
-    if ($config.BootOrder -notmatch "^HDD0") {
+    if ($config.BootOrder -notmatch "^(HDD0|NVMe0)") {
         $isCompliant = $false
         $errors += "BootOrder does not prioritize internal drive (Current: $($config.BootOrder))"
     }
