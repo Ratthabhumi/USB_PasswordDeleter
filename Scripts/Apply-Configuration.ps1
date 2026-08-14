@@ -101,6 +101,11 @@ function Set-LenovoFirmwareConfig {
             $resHdp1 = Invoke-CimMethod -InputObject $setPwdWmi -MethodName SetBiosPassword -Arguments @{Parameter=$cmdHdp1}
             Write-Host "     Result (SetBiosPassword uhdp1): $($resHdp1.return)"
 
+            # Try User HDP slot 2
+            $cmdHdp2 = "uhdp2,$popHddPassword,,ascii,us"
+            $resHdp2 = Invoke-CimMethod -InputObject $setPwdWmi -MethodName SetBiosPassword -Arguments @{Parameter=$cmdHdp2}
+            Write-Host "     Result (SetBiosPassword uhdp2): $($resHdp2.return)"
+
             # Try Master HDP (MHP)
             $cmdMhp = "mhdp,$popHddPassword,,ascii,us"
             $resMhp = Invoke-CimMethod -InputObject $setPwdWmi -MethodName SetBiosPassword -Arguments @{Parameter=$cmdMhp}
@@ -110,6 +115,11 @@ function Set-LenovoFirmwareConfig {
             $cmdMhp1 = "mhdp1,$popHddPassword,,ascii,us"
             $resMhp1 = Invoke-CimMethod -InputObject $setPwdWmi -MethodName SetBiosPassword -Arguments @{Parameter=$cmdMhp1}
             Write-Host "     Result (SetBiosPassword mhdp1): $($resMhp1.return)"
+
+            # Try Master HDP slot 2
+            $cmdMhp2 = "mhdp2,$popHddPassword,,ascii,us"
+            $resMhp2 = Invoke-CimMethod -InputObject $setPwdWmi -MethodName SetBiosPassword -Arguments @{Parameter=$cmdMhp2}
+            Write-Host "     Result (SetBiosPassword mhdp2): $($resMhp2.return)"
         }
 
         # ----------------------------------------------------

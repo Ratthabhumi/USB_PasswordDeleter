@@ -27,12 +27,11 @@ function Get-LenovoFirmwareConfig {
             if ($setting.CurrentSetting -match "^PowerOnPassword,") {
                 $config.PowerOnPassword = $setting.CurrentSetting -replace "^PowerOnPassword," , ""
             }
-            if ($setting.CurrentSetting -match "^HardDisk1Password,") {
-                $config.HardDiskPassword = $setting.CurrentSetting -replace "^HardDisk1Password," , ""
-            }
-            if ($setting.CurrentSetting -match "^HardDisk2Password,") {
-                $val = $setting.CurrentSetting -replace "^HardDisk2Password," , ""
-                if ($config.HardDiskPassword -eq "Unknown" -or [string]::IsNullOrEmpty($config.HardDiskPassword)) {
+            if ($setting.CurrentSetting -match "^HardDisk[1-3]Password,") {
+                $val = $setting.CurrentSetting -replace "^HardDisk[1-3]Password," , ""
+                if ($val -match "^(Enable|Enabled|1|User)$") {
+                    $config.HardDiskPassword = $val
+                } elseif ($config.HardDiskPassword -eq "Unknown") {
                     $config.HardDiskPassword = $val
                 }
             }
