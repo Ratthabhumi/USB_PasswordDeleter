@@ -42,15 +42,8 @@ function Get-SecureCredential {
 }
 
 function Invoke-LenovoClearPassword {
-    # -----------------------------------------------------------------------
-    # Uses modern WmiOpcodeInterface (ThinkPad 2020+) if available,
-    # falls back to legacy SetBiosPassword. 
-    # Per ConfigJon reference: OpcodeInterface is the ONLY reliable way on 
-    # 2020+ ThinkPads because legacy API reports "Success" then BIOS rejects 
-    # at reboot with 0191 if any parameter is wrong.
-    # -----------------------------------------------------------------------
     param(
-        [Parameter(Mandatory=$true)][string]$PasswordType,  # e.g. "pop", "pap", "uhdp1", "mhdp1"
+        [Parameter(Mandatory=$true)][string]$PasswordName,  # "pop", "pap", "uhdp1", "mhdp1", "uhdp2", "mhdp2"
         [Parameter(Mandatory=$true)][AllowEmptyString()][string]$CurrentPassword,
         [Parameter(Mandatory=$false)][object]$OpcodeInterface = $null,
         [Parameter(Mandatory=$false)][object]$LegacyInterface = $null
@@ -59,7 +52,7 @@ function Invoke-LenovoClearPassword {
     if ($null -ne $OpcodeInterface) {
         # Modern OpcodeInterface path (ThinkPad 2020+)
         try {
-            Invoke-CimMethod -InputObject $OpcodeInterface -MethodName WmiOpcodeInterface -Arguments @{Parameter="WmiOpcodePasswordType:$PasswordType;"} -ErrorAction Stop | Out-Null
+            Invoke-CimMethod -InputObject $OpcodeInterface -MethodName WmiOpcodeInterface -Arguments @{Parameter="WmiOpcodePasswordType:$PasswordName;"} -ErrorAction Stop | Out-Null
             Invoke-CimMethod -InputObject $OpcodeInterface -MethodName WmiOpcodeInterface -Arguments @{Parameter="WmiOpcodePasswordCurrent01:$CurrentPassword;"} -ErrorAction Stop | Out-Null
             Invoke-CimMethod -InputObject $OpcodeInterface -MethodName WmiOpcodeInterface -Arguments @{Parameter="WmiOpcodePasswordNew01:;"} -ErrorAction Stop | Out-Null
             $result = Invoke-CimMethod -InputObject $OpcodeInterface -MethodName WmiOpcodeInterface -Arguments @{Parameter="WmiOpcodePasswordSetUpdate;"} -ErrorAction Stop
@@ -68,9 +61,9 @@ function Invoke-LenovoClearPassword {
             return "Error: $($_.Exception.Message)"
         }
     } elseif ($null -ne $LegacyInterface) {
-        # Legacy SetBiosPassword fallback (older ThinkPads)
+        # Legacy SetBiosPassword fallback
         try {
-            $result = Invoke-CimMethod -InputObject $LegacyInterface -MethodName SetBiosPassword -Arguments @{Parameter="$PasswordType,$CurrentPassword,,ascii,us"} -ErrorAction Stop
+            $result = Invoke-CimMethod -InputObject $LegacyInterface -MethodName SetBiosPassword -Arguments @{Parameter="$PasswordName,$CurrentPassword,,ascii,us"} -ErrorAction Stop
             return $result.return
         } catch {
             return "Error: $($_.Exception.Message)"
@@ -89,20 +82,10 @@ function Set-LenovoFirmwareConfig {
         return $false
     }
 
-    # Only use Supervisor Password if it is actually enabled in BIOS
-    if ($null -ne $Config -and $Config.FirmwareAuth -notmatch "^(Enable|Enabled|1)$") {
-        Write-Host "  [INFO] Supervisor Password is not active on this machine. Proceeding without it."
-        $svpPassword = ""
-    }
-
     Write-Host "Applying authorized company BIOS configurations..." -ForegroundColor Cyan
     $success = $true
 
     try {
-        # -----------------------------------------------------------------------
-        # Detect which WMI interface is available
-        # OpcodeInterface is required for ThinkPad 2020+ (our 20X3 models)
-        # -----------------------------------------------------------------------
         $opcodeInterface = Get-CimInstance -Namespace "root\wmi" -ClassName Lenovo_WmiOpcodeInterface -ErrorAction SilentlyContinue
         $legacyInterface = Get-CimInstance -Namespace "root\wmi" -ClassName Lenovo_SetBiosPassword -ErrorAction SilentlyContinue
         $saveWmi         = Get-CimInstance -Namespace "root\wmi" -ClassName Lenovo_SaveBiosSettings -ErrorAction SilentlyContinue
@@ -118,21 +101,27 @@ function Set-LenovoFirmwareConfig {
 
         # -----------------------------------------------------------------------
         # 1. Clear Power-On Password (POP)
+        # Per Lenovo standard: If Supervisor Password exists, use SVP to clear POP.
+        # Otherwise use the POP password.
         # -----------------------------------------------------------------------
         Write-Host "  -> Clearing Power-On Password..."
-        if (-not [string]::IsNullOrEmpty($popHddPassword)) {
-            $res = Invoke-LenovoClearPassword -PasswordType "pop" -CurrentPassword $popHddPassword -OpcodeInterface $opcodeInterface -LegacyInterface $legacyInterface
-            Write-Host "     Result (pop): $res"
+        $popAuth = if (-not [string]::IsNullOrEmpty($svpPassword) -and ($null -ne $Config -and $Config.FirmwareAuth -eq "Enabled")) {
+            $svpPassword
         } else {
-            Write-Host "     Skipping: No POP/HDD credential on file."
+            $popHddPassword
+        }
+
+        if (-not [string]::IsNullOrEmpty($popAuth)) {
+            $res = Invoke-LenovoClearPassword -PasswordType "pop" -CurrentPassword $popAuth -OpcodeInterface $opcodeInterface -LegacyInterface $legacyInterface
+            Write-Host "     Result (pop): $res"
         }
 
         # -----------------------------------------------------------------------
-        # 2. Clear Hard Disk / NVMe Passwords (User and Master, slots 1 and 2)
+        # 2. Clear Hard Disk / NVMe Passwords (User & Master, Slots 1 & 2)
         # -----------------------------------------------------------------------
-        Write-Host "  -> Clearing Hard Disk / NVMe Password..."
+        Write-Host "  -> Clearing Hard Disk / NVMe Passwords..."
         if (-not [string]::IsNullOrEmpty($popHddPassword)) {
-            foreach ($type in @("uhdp1", "uhdp2", "mhdp1", "mhdp2")) {
+            foreach ($type in @("uhdp1", "mhdp1", "uhdp2", "mhdp2")) {
                 $res = Invoke-LenovoClearPassword -PasswordType $type -CurrentPassword $popHddPassword -OpcodeInterface $opcodeInterface -LegacyInterface $legacyInterface
                 Write-Host "     Result ($type): $res"
             }
@@ -140,21 +129,15 @@ function Set-LenovoFirmwareConfig {
 
         # -----------------------------------------------------------------------
         # 3. Clear Supervisor Password (PAP) as FINAL step
-        # NOTE: SaveBiosSettings is NOT called here when using OpcodeInterface.
-        # OpcodeInterface commits atomically via WmiOpcodePasswordSetUpdate.
-        # SaveBiosSettings is only required for SetBiosSetting (non-password) changes.
         # -----------------------------------------------------------------------
         if (-not [string]::IsNullOrEmpty($svpPassword)) {
             Write-Host "  -> Clearing Supervisor / Master BIOS Password..."
             $res = Invoke-LenovoClearPassword -PasswordType "pap" -CurrentPassword $svpPassword -OpcodeInterface $opcodeInterface -LegacyInterface $legacyInterface
             Write-Host "     Result (pap): $res"
-        } else {
-            Write-Host "  -> Skipping Supervisor Password (Already Disabled)..."
         }
 
         # -----------------------------------------------------------------------
-        # 4. SaveBiosSettings is only needed for legacy interface (non-password settings)
-        # Per Lenovo WMI spec: SaveBiosSettings ONLY accepts SVP or empty string.
+        # 4. Save settings if legacy interface
         # -----------------------------------------------------------------------
         if ($null -eq $opcodeInterface -and $null -ne $saveWmi) {
             Write-Host "  -> Committing BIOS settings (legacy save)..."
