@@ -15,8 +15,15 @@ function Set-InternalBootPriority {
         $setWmi = Get-CimInstance -Namespace "root\wmi" -ClassName Lenovo_SetBiosSetting
         $saveWmi = Get-CimInstance -Namespace "root\wmi" -ClassName Lenovo_SaveBiosSettings
 
-        # Enforce internal drive (HDD0 / NVMe) as the first boot option
-        $newBootOrder = "NVMe0:HDD0:USBCD:USBHDD:PCILAN"
+        # Safely reorder the existing boot order to prioritize internal drives
+        $currentSetting = Get-CimInstance -Namespace "root\wmi" -ClassName Lenovo_BiosSetting -ErrorAction Stop | Where-Object CurrentSetting -match "^BootOrder,"
+        $currentOrderStr = $currentSetting.CurrentSetting -replace "^BootOrder,", ""
+        
+        $devices = $currentOrderStr -split ":"
+        $internalDrives = $devices | Where-Object { $_ -match "^(NVMe0|HDD0)$" }
+        $otherDrives = $devices | Where-Object { $_ -notmatch "^(NVMe0|HDD0)$" }
+        
+        $newBootOrder = ($internalDrives + $otherDrives) -join ":"
         
         $cmd = if (-not [string]::IsNullOrEmpty($password)) {
             "BootOrder,$newBootOrder,$password,ascii,us"
