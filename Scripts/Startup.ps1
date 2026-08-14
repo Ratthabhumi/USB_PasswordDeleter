@@ -1,6 +1,6 @@
 # Lenovo Enterprise Device Preparation - Phase 1 (Read-Only)
 $ErrorActionPreference = 'Stop'
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$ScriptDir = $PSScriptRoot
 
 # Load Modules
 . (Join-Path $ScriptDir "Detect-Hardware.ps1")

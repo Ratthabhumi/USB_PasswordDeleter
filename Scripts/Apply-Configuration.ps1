@@ -5,7 +5,7 @@ function Get-SecureCredential {
         [string]$CredentialName
     )
 
-    $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Definition
+    $scriptPath = $PSScriptRoot
     $fileName = if ($CredentialName -eq "supervisor") { "supervisor.txt" } else { "pop_hdd.txt" }
     $configPath = Join-Path $scriptPath "..\Config\$fileName"
 
