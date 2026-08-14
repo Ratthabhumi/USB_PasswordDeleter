@@ -139,7 +139,7 @@ if exist "%OC_PATH%\WinPE-StorageWMI.cab" (
 echo.
 echo [4/6] Copying Project Files to WinPE...
 robocopy "%PROJECT_DIR%" "%MOUNT_DIR%\USB_PasswordDeleter" /E /XD sources EFI Boot "System Volume Information" .git /XF bootmgr bootmgr.efi >nul
-if %errorLevel% NEQ 0 (
+if %errorLevel% GEQ 8 (
     echo.
     echo [ERROR] Failed to copy project files to WinPE image.
     pause
