@@ -45,6 +45,7 @@ function Invoke-LenovoClearPassword {
     param(
         [Parameter(Mandatory=$true)][string]$PasswordType,
         [Parameter(Mandatory=$true)][AllowEmptyString()][string]$CurrentPassword,
+        [Parameter(Mandatory=$false)][AllowEmptyString()][string]$AdminPassword = "",
         [Parameter(Mandatory=$false)][object]$OpcodeInterface = $null,
         [Parameter(Mandatory=$false)][object]$LegacyInterface = $null
     )
@@ -52,10 +53,13 @@ function Invoke-LenovoClearPassword {
     if ($null -ne $OpcodeInterface) {
         # Modern OpcodeInterface path (ThinkPad 2020+ & ThinkCentre M-series)
         try {
-            # ThinkCentre/ThinkStation Desktops require WmiOpcodePasswordAdmin before password changes
+            # ThinkCentre/ThinkStation Desktops require supervisor password in WmiOpcodePasswordAdmin
             $isDesktop = ((Get-CimInstance -ClassName Win32_ComputerSystem -ErrorAction SilentlyContinue).PCSystemType -ne 2)
-            if ($isDesktop -and -not [string]::IsNullOrEmpty($CurrentPassword)) {
-                Invoke-CimMethod -InputObject $OpcodeInterface -MethodName WmiOpcodeInterface -Arguments @{Parameter="WmiOpcodePasswordAdmin:$CurrentPassword;"} -ErrorAction SilentlyContinue | Out-Null
+            if ($isDesktop) {
+                $authAdmin = if (-not [string]::IsNullOrEmpty($AdminPassword)) { $AdminPassword } else { $CurrentPassword }
+                if (-not [string]::IsNullOrEmpty($authAdmin)) {
+                    Invoke-CimMethod -InputObject $OpcodeInterface -MethodName WmiOpcodeInterface -Arguments @{Parameter="WmiOpcodePasswordAdmin:$authAdmin;"} -ErrorAction SilentlyContinue | Out-Null
+                }
             }
 
             Invoke-CimMethod -InputObject $OpcodeInterface -MethodName WmiOpcodeInterface -Arguments @{Parameter="WmiOpcodePasswordType:$PasswordType;"} -ErrorAction Stop | Out-Null
@@ -97,7 +101,7 @@ function Set-LenovoFirmwareConfig {
         $saveWmi         = Get-CimInstance -Namespace "root\wmi" -ClassName Lenovo_SaveBiosSettings -ErrorAction SilentlyContinue
 
         if ($null -ne $opcodeInterface) {
-            Write-Host "  [INFO] Using modern WmiOpcodeInterface (ThinkPad 2020+)" -ForegroundColor DarkCyan
+            Write-Host "  [INFO] Using modern WmiOpcodeInterface (ThinkPad / ThinkCentre 2020+)" -ForegroundColor DarkCyan
         } elseif ($null -ne $legacyInterface) {
             Write-Host "  [INFO] Using legacy SetBiosPassword interface (older ThinkPad)" -ForegroundColor DarkCyan
         } else {
@@ -107,8 +111,6 @@ function Set-LenovoFirmwareConfig {
 
         # -----------------------------------------------------------------------
         # 1. Clear Power-On Password (POP)
-        # Per Lenovo standard: If Supervisor Password exists, use SVP to clear POP.
-        # Otherwise use the POP password.
         # -----------------------------------------------------------------------
         Write-Host "  -> Clearing Power-On Password..."
         $popAuth = if (-not [string]::IsNullOrEmpty($svpPassword) -and ($null -ne $Config -and $Config.FirmwareAuth -eq "Enabled")) {
@@ -118,18 +120,32 @@ function Set-LenovoFirmwareConfig {
         }
 
         if (-not [string]::IsNullOrEmpty($popAuth)) {
-            $res = Invoke-LenovoClearPassword -PasswordType "pop" -CurrentPassword $popAuth -OpcodeInterface $opcodeInterface -LegacyInterface $legacyInterface
+            $res = Invoke-LenovoClearPassword -PasswordType "pop" -CurrentPassword $popAuth -AdminPassword $svpPassword -OpcodeInterface $opcodeInterface -LegacyInterface $legacyInterface
             Write-Host "     Result (pop): $res"
         }
 
         # -----------------------------------------------------------------------
-        # 2. Clear Hard Disk / NVMe Passwords (All slot variations)
+        # 2. Clear Hard Disk / NVMe / M.2 Passwords
+        # Try both pop_hdd password AND supervisor password for M.2 Drive Admin password
         # -----------------------------------------------------------------------
-        Write-Host "  -> Clearing Hard Disk / NVMe Passwords..."
+        Write-Host "  -> Clearing Hard Disk / NVMe / M.2 Passwords..."
+        $hddTypes = @("udrp1", "adrp1", "uhdp1", "mhdp1", "udrp2", "adrp2", "uhdp2", "mhdp2", "uhdp", "mhdp")
+        
+        # Pass 1: Try with pop_hdd password
         if (-not [string]::IsNullOrEmpty($popHddPassword)) {
-            foreach ($type in @("uhdp1", "mhdp1", "uhdp2", "mhdp2", "udrp1", "adrp1", "uhdp", "mhdp")) {
-                $res = Invoke-LenovoClearPassword -PasswordType $type -CurrentPassword $popHddPassword -OpcodeInterface $opcodeInterface -LegacyInterface $legacyInterface
-                Write-Host "     Result ($type): $res"
+            foreach ($type in $hddTypes) {
+                $res = Invoke-LenovoClearPassword -PasswordType $type -CurrentPassword $popHddPassword -AdminPassword $svpPassword -OpcodeInterface $opcodeInterface -LegacyInterface $legacyInterface
+                Write-Host "     Result ($type [HDD]): $res"
+            }
+        }
+
+        # Pass 2: Try with supervisor password (for M.2 Admin Single Password)
+        if (-not [string]::IsNullOrEmpty($svpPassword) -and ($svpPassword -ne $popHddPassword)) {
+            foreach ($type in $hddTypes) {
+                $res = Invoke-LenovoClearPassword -PasswordType $type -CurrentPassword $svpPassword -AdminPassword $svpPassword -OpcodeInterface $opcodeInterface -LegacyInterface $legacyInterface
+                if ($res -eq "Success") {
+                    Write-Host "     Result ($type [SVP-Auth]): $res"
+                }
             }
         }
 
@@ -138,7 +154,7 @@ function Set-LenovoFirmwareConfig {
         # -----------------------------------------------------------------------
         if (-not [string]::IsNullOrEmpty($svpPassword)) {
             Write-Host "  -> Clearing Supervisor / Master BIOS Password..."
-            $res = Invoke-LenovoClearPassword -PasswordType "pap" -CurrentPassword $svpPassword -OpcodeInterface $opcodeInterface -LegacyInterface $legacyInterface
+            $res = Invoke-LenovoClearPassword -PasswordType "pap" -CurrentPassword $svpPassword -AdminPassword $svpPassword -OpcodeInterface $opcodeInterface -LegacyInterface $legacyInterface
             Write-Host "     Result (pap): $res"
         }
 
