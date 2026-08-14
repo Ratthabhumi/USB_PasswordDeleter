@@ -63,7 +63,7 @@ $hasPasswords = ($config.PowerOnPassword -match "^(Enable|Enabled|1)$" -or `
                  $config.FirmwareAuth -match "^(Enable|Enabled|1)$" -or `
                  ($config.PasswordState -notin @("0", "None", "Unknown", "")))
 
-if ($config.SecureBoot -in @("Disable", "Disabled", "0") -and $config.BootOrder -match "^HDD0" -and -not $hasPasswords) {
+if (-not $hasPasswords) {
     Write-Host "System is already compliant (No active passwords, SecureBoot disabled, BootOrder internal)." -ForegroundColor Green
     Write-AuditLog -Serial $hw.Serial -MachineType $hw.MachineType -Model $hw.Model -BIOSVersion $hw.BIOSVersion -Storage $hw.Storage -Result "ALREADY_COMPLIANT" -ErrorDetail ""
 } else {

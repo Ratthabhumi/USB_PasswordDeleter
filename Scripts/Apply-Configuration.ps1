@@ -123,15 +123,10 @@ function Set-LenovoFirmwareConfig {
         # 5. Commit BIOS Setting Changes before deleting Supervisor Password
         # ----------------------------------------------------
         Write-Host "  -> Committing intermediate BIOS settings..."
-        # IMPORTANT: SaveBiosSettings must be authorized with the password currently active on the machine.
-        # If SVP is disabled, use the POP/HDD password. If both are empty, save without authorization.
-        $saveParam = if (-not [string]::IsNullOrEmpty($svpPassword)) {
-            "$svpPassword,ascii,us"
-        } elseif (-not [string]::IsNullOrEmpty($popHddPassword)) {
-            "$popHddPassword,ascii,us"
-        } else {
-            ",ascii,us"
-        }
+        # IMPORTANT per Lenovo WMI spec:
+        # SaveBiosSettings ONLY accepts Supervisor Password (or empty if no SVP).
+        # Sending POP/HDD password here causes 0191. Always use SVP or empty.
+        $saveParam = if (-not [string]::IsNullOrEmpty($svpPassword)) { "$svpPassword,ascii,us" } else { ",ascii,us" }
         Invoke-CimMethod -InputObject $saveWmi -MethodName SaveBiosSettings -Arguments @{Parameter=$saveParam} | Out-Null
 
         # ----------------------------------------------------
