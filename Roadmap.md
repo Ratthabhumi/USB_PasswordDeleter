@@ -23,7 +23,10 @@
 - [x] Resolve Error 0191 collision by isolating password deletion from general BIOS setting changes.
 - [x] Implement M.2 / NVMe Drive 1 Admin & User password clearance (`adrp1`, `udrp1`, `uhdp1`, `mhdp1`, `uhdp2`, `mhdp2`).
 - [x] Add ThinkCentre M90q desktop administrative session authorization (`WmiOpcodePasswordAdmin`).
+- [x] Resolve HDD Access Denied issues by actively injecting the Supervisor Password as an authorization parameter.
 - [x] Implement automated `Logging.ps1` module writing telemetry to `audit.csv`.
+- [x] Intercept and append exact WMI error codes to `audit.csv` for precise debugging.
+- [x] Create `Mock-WMI-Simulator.ps1` to test BIOS interactions on non-Lenovo hardware.
 
 ## Phase 4: Production Rollout & Scaling (In Progress)
 - [x] Verified Supervisor Password deletion on pilot ThinkPad and ThinkCentre units.

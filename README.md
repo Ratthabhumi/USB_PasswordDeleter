@@ -11,15 +11,18 @@ An enterprise-grade, offline UEFI WinPE automation framework designed to remove 
 2. **Comprehensive Password Deletion**:
    - 🔑 **Supervisor Password (SVP)**: Clears the master BIOS administrative password (`pap`).
    - 🔑 **Power-On Password (POP)**: Clears the boot authorization prompt (`pop`).
-   - 🔑 **Hard Disk / NVMe / M.2 Password**: Clears storage locks (`uhdp1`, `mhdp1`, `uhdp2`, `mhdp2`, `udrp1`, `adrp1`).
+   - 🔑 **Hard Disk / NVMe / M.2 Password**: Clears storage locks (`uhdp1`, `mhdp1`, `uhdp2`, `mhdp2`, `udrp1`, `adrp1`). Automatically provides SVP authorization to prevent Error 0191.
 3. **Multi-Generation WMI Architecture**:
    - Utilizes the modern `Lenovo_WmiOpcodeInterface` standard for 2020+ ThinkPads and ThinkCentre desktops.
    - Automatically handles desktop admin authorization (`WmiOpcodePasswordAdmin`) on ThinkCentre M-series.
    - Falls back gracefully to legacy `Lenovo_SetBiosPassword` on older models.
 4. **AES-256 Encrypted Credential Store**:
    - Authorization credentials are encrypted with AES-256 before injection into the WinPE image. No plaintext passwords exist in scripts or storage.
-5. **Automated Audit Trail**:
+5. **Automated Audit Trail & WMI Error Capturing**:
    - Automatically records machine serial numbers, model types, BIOS versions, and operation outcomes to `audit.csv`.
+   - Intercepts WMI execution failures (e.g., *Access Denied*, *Invalid Parameter*) and logs the exact error code to the USB drive for rapid troubleshooting.
+6. **Mock WMI Execution Simulator**:
+   - Includes `Mock-WMI-Simulator.ps1` for offline logic testing and debugging without requiring physical Lenovo hardware.
 
 ---
 

@@ -58,8 +58,9 @@ Right-click `Duplicate-USB.bat` and select **"Run as administrator"**.
 - `64`–`71`: Systems with System Management Password (SMP)
 
 ### Critical Firmware Constraints & Troubleshooting
-1. **Error 0191 (System Security - Invalid Remote Change):**
+1. **Error 0191 (System Security - Access Denied / Invalid Change):**
    - Occurs when attempting to modify general BIOS Settings (e.g. SecureBoot, BootOrder) in the same power cycle as password deletions. Keep password deletion operations isolated.
-   - Occurs when an incorrect authorizing password is submitted.
+   - Occurs when attempting to delete a Hard Disk Password (HDP) without providing the Supervisor Password (SVP) as an authorization parameter (e.g., `hdp,<hdd_pwd>,,,ascii,us,<svp_pwd>`).
+   - Occurs on ThinkCentre Desktops if `WmiOpcodePasswordAdmin` is not called before clearing M.2 `adrp1` slots.
 2. **Reboot Requirement:** Password deletions via OpcodeInterface are queued in NVRAM and finalized upon the **next system reboot**.
 3. **Corrupted USB Drive?** Run `Clean-USB.bat` as Administrator to wipe and restore partition structures.
