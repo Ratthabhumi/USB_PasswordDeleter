@@ -91,20 +91,25 @@ function Set-LenovoFirmwareConfig {
         # ----------------------------------------------------
         Write-Host "  -> Clearing Hard Disk / NVMe Password..."
         if (-not [string]::IsNullOrEmpty($popHddPassword) -and $null -ne $setPwdWmi) {
-            # Try user HDP
-            $cmdHdp = "hdp,$popHddPassword,,ascii,us"
+            # Try User HDP
+            $cmdHdp = "uhdp,$popHddPassword,,ascii,us"
             $resHdp = Invoke-CimMethod -InputObject $setPwdWmi -MethodName SetBiosPassword -Arguments @{Parameter=$cmdHdp}
-            Write-Host "     Result (SetBiosPassword hdp): $($resHdp.return)"
+            Write-Host "     Result (SetBiosPassword uhdp): $($resHdp.return)"
 
-            # Try HDP slot 1 (NVMe)
-            $cmdHdp1 = "hdp1,$popHddPassword,,ascii,us"
+            # Try User HDP slot 1 (NVMe)
+            $cmdHdp1 = "uhdp1,$popHddPassword,,ascii,us"
             $resHdp1 = Invoke-CimMethod -InputObject $setPwdWmi -MethodName SetBiosPassword -Arguments @{Parameter=$cmdHdp1}
-            Write-Host "     Result (SetBiosPassword hdp1): $($resHdp1.return)"
+            Write-Host "     Result (SetBiosPassword uhdp1): $($resHdp1.return)"
 
             # Try Master HDP (MHP)
-            $cmdMhp = "mhp,$popHddPassword,,ascii,us"
+            $cmdMhp = "mhdp,$popHddPassword,,ascii,us"
             $resMhp = Invoke-CimMethod -InputObject $setPwdWmi -MethodName SetBiosPassword -Arguments @{Parameter=$cmdMhp}
-            Write-Host "     Result (SetBiosPassword mhp): $($resMhp.return)"
+            Write-Host "     Result (SetBiosPassword mhdp): $($resMhp.return)"
+
+            # Try Master HDP slot 1 (NVMe)
+            $cmdMhp1 = "mhdp1,$popHddPassword,,ascii,us"
+            $resMhp1 = Invoke-CimMethod -InputObject $setPwdWmi -MethodName SetBiosPassword -Arguments @{Parameter=$cmdMhp1}
+            Write-Host "     Result (SetBiosPassword mhdp1): $($resMhp1.return)"
         }
 
         # ----------------------------------------------------
